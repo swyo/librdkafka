@@ -114,8 +114,6 @@ const char *rd_kafka_op2str(rd_kafka_op_type_t type) {
                 "REPLY:ALTERUSERSCRAMCREDENTIALS",
             [RD_KAFKA_OP_DESCRIBEUSERSCRAMCREDENTIALS] =
                 "REPLY:DESCRIBEUSERSCRAMCREDENTIALS",
-            [RD_KAFKA_OP_LEADERS] = "REPLY:LEADERS",
-            [RD_KAFKA_OP_BARRIER] = "REPLY:BARRIER",
             [RD_KAFKA_OP_LISTOFFSETS] = "REPLY:LISTOFFSETS",
         };
 
@@ -273,8 +271,6 @@ rd_kafka_op_t *rd_kafka_op_new0(const char *source, rd_kafka_op_type_t type) {
                 sizeof(rko->rko_u.admin_request),
             [RD_KAFKA_OP_DESCRIBEUSERSCRAMCREDENTIALS] =
                 sizeof(rko->rko_u.admin_request),
-            [RD_KAFKA_OP_LEADERS] = sizeof(rko->rko_u.leaders),
-            [RD_KAFKA_OP_BARRIER] = _RD_KAFKA_OP_EMPTY,
             [RD_KAFKA_OP_LISTOFFSETS] = sizeof(rko->rko_u.admin_request),
         };
         size_t tsize = op2size[type & ~RD_KAFKA_OP_FLAGMASK];

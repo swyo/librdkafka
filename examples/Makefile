@@ -8,12 +8,9 @@ EXAMPLES ?= rdkafka_example rdkafka_performance rdkafka_example_cpp \
 	describe_consumer_groups \
 	list_consumer_group_offsets \
 	alter_consumer_group_offsets \
-<<<<<<< HEAD
 	incremental_alter_configs \
 	user_scram \
-=======
 	list_offsets \
->>>>>>> 6b47a319 (Rebase Commit)
 	misc
 
 all: $(EXAMPLES)

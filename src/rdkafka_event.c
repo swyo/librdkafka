@@ -433,7 +433,6 @@ rd_kafka_event_AlterConsumerGroupOffsets_result(rd_kafka_event_t *rkev) {
                     const rd_kafka_AlterConsumerGroupOffsets_result_t *)rkev;
 }
 
-<<<<<<< HEAD
 const rd_kafka_DescribeUserScramCredentials_result_t *
 rd_kafka_event_DescribeUserScramCredentials_result(rd_kafka_event_t *rkev) {
         if (!rkev || rkev->rko_evtype !=
@@ -453,7 +452,6 @@ rd_kafka_event_AlterUserScramCredentials_result(rd_kafka_event_t *rkev) {
                 return (
                     const rd_kafka_AlterUserScramCredentials_result_t *)rkev;
 }
-=======
 const rd_kafka_ListOffsets_result_t *
 rd_kafka_event_ListOffsets_result(rd_kafka_event_t *rkev) {
         if (!rkev ||
@@ -464,7 +462,6 @@ rd_kafka_event_ListOffsets_result(rd_kafka_event_t *rkev) {
                     const rd_kafka_ListOffsets_result_t *)rkev;
 }
 
->>>>>>> 6b47a319 (Rebase Commit)
 const rd_kafka_ListConsumerGroupOffsets_result_t *
 rd_kafka_event_ListConsumerGroupOffsets_result(rd_kafka_event_t *rkev) {
         if (!rkev ||
