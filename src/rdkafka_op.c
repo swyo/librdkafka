@@ -107,6 +107,7 @@ const char *rd_kafka_op2str(rd_kafka_op_type_t type) {
             [RD_KAFKA_OP_TXN]                 = "REPLY:TXN",
             [RD_KAFKA_OP_GET_REBALANCE_PROTOCOL] =
                 "REPLY:GET_REBALANCE_PROTOCOL",
+<<<<<<< HEAD
             [RD_KAFKA_OP_LEADERS]     = "REPLY:LEADERS",
             [RD_KAFKA_OP_BARRIER]     = "REPLY:BARRIER",
             [RD_KAFKA_OP_SASL_REAUTH] = "REPLY:SASL_REAUTH",
@@ -114,6 +115,11 @@ const char *rd_kafka_op2str(rd_kafka_op_type_t type) {
                 "REPLY:ALTERUSERSCRAMCREDENTIALS",
             [RD_KAFKA_OP_DESCRIBEUSERSCRAMCREDENTIALS] =
                 "REPLY:DESCRIBEUSERSCRAMCREDENTIALS",
+=======
+            [RD_KAFKA_OP_LEADERS] = "REPLY:LEADERS",
+            [RD_KAFKA_OP_BARRIER] = "REPLY:BARRIER",
+            [RD_KAFKA_OP_LISTOFFSETS] = "REPLY:LISTOFFSETS",
+>>>>>>> 6b47a319 (Rebase Commit)
         };
 
         if (type & RD_KAFKA_OP_REPLY)
@@ -263,6 +269,7 @@ rd_kafka_op_t *rd_kafka_op_new0(const char *source, rd_kafka_op_type_t type) {
             [RD_KAFKA_OP_TXN]            = sizeof(rko->rko_u.txn),
             [RD_KAFKA_OP_GET_REBALANCE_PROTOCOL] =
                 sizeof(rko->rko_u.rebalance_protocol),
+<<<<<<< HEAD
             [RD_KAFKA_OP_LEADERS]     = sizeof(rko->rko_u.leaders),
             [RD_KAFKA_OP_BARRIER]     = _RD_KAFKA_OP_EMPTY,
             [RD_KAFKA_OP_SASL_REAUTH] = _RD_KAFKA_OP_EMPTY,
@@ -270,6 +277,11 @@ rd_kafka_op_t *rd_kafka_op_new0(const char *source, rd_kafka_op_type_t type) {
                 sizeof(rko->rko_u.admin_request),
             [RD_KAFKA_OP_DESCRIBEUSERSCRAMCREDENTIALS] =
                 sizeof(rko->rko_u.admin_request),
+=======
+            [RD_KAFKA_OP_LEADERS] = sizeof(rko->rko_u.leaders),
+            [RD_KAFKA_OP_BARRIER] = _RD_KAFKA_OP_EMPTY,
+            [RD_KAFKA_OP_LISTOFFSETS] = sizeof(rko->rko_u.admin_request),
+>>>>>>> 6b47a319 (Rebase Commit)
         };
         size_t tsize = op2size[type & ~RD_KAFKA_OP_FLAGMASK];
 
@@ -418,6 +430,7 @@ void rd_kafka_op_destroy(rd_kafka_op_t *rko) {
         case RD_KAFKA_OP_LISTCONSUMERGROUPOFFSETS:
         case RD_KAFKA_OP_ALTERUSERSCRAMCREDENTIALS:
         case RD_KAFKA_OP_DESCRIBEUSERSCRAMCREDENTIALS:
+        case RD_KAFKA_OP_LISTOFFSETS:
                 rd_kafka_replyq_destroy(&rko->rko_u.admin_request.replyq);
                 rd_list_destroy(&rko->rko_u.admin_request.args);
                 if (rko->rko_u.admin_request.options.match_consumer_group_states

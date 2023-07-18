@@ -101,6 +101,14 @@ rd_kafka_FindCoordinatorRequest(rd_kafka_broker_t *rkb,
                                 rd_kafka_resp_cb_t *resp_cb,
                                 void *opaque);
 
+rd_list_t *rd_kafka_ListOffsetsResponseParser(rd_kafka_buf_t *reply,char *errstr,size_t errstr_size);
+rd_kafka_buf_t *rd_kafka_ListOffsetsRequestWriter(rd_kafka_broker_t *rkb,
+                                                  rd_kafka_topic_partition_list_t *topic_partitions,
+                                                  rd_kafka_isolation_level_t isolation_level,
+                                                  rd_kafka_replyq_t replyq,
+                                                  char *errstr,
+                                                  size_t errstr_size);
+
 rd_kafka_resp_err_t
 rd_kafka_handle_ListOffsets(rd_kafka_t *rk,
                             rd_kafka_broker_t *rkb,
@@ -109,13 +117,11 @@ rd_kafka_handle_ListOffsets(rd_kafka_t *rk,
                             rd_kafka_buf_t *request,
                             rd_kafka_topic_partition_list_t *offsets,
                             int *actionsp);
-
 void rd_kafka_ListOffsetsRequest(rd_kafka_broker_t *rkb,
-                                 rd_kafka_topic_partition_list_t *offsets,
+                                 rd_kafka_topic_partition_list_t *partitions,
                                  rd_kafka_replyq_t replyq,
                                  rd_kafka_resp_cb_t *resp_cb,
                                  void *opaque);
-
 rd_kafka_resp_err_t
 rd_kafka_handle_OffsetForLeaderEpoch(rd_kafka_t *rk,
                                      rd_kafka_broker_t *rkb,
