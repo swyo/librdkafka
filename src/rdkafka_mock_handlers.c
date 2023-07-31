@@ -2105,6 +2105,133 @@ err_parse:
         return -1;
 }
 
+static int
+rd_kafka_mock_handle_ConsumerGroupHeartbeat(rd_kafka_mock_connection_t *mconn,
+                                            rd_kafka_buf_t *rkbuf) {
+        const rd_bool_t log_decode_errors = rd_true;
+        rd_kafka_mock_cluster_t *mcluster = mconn->broker->cluster;
+        rd_kafka_buf_t *resp = rd_kafka_mock_buf_new_response(rkbuf);
+        rd_kafka_topic_partition_list_t *rktparlist;
+        rd_kafkap_str_t GroupId, MemberId, InstanceId, RackId,
+            SubscribedTopicRegex, ServerAssignor;
+        rd_kafkap_str_t *SubscribedTopicNames = NULL;
+        int32_t MemberEpoch, RebalanceTimeoutMs, SubscribedTopicNamesCnt,
+            ClientAssignorsCnt, TopicPartitionsCnt;
+        int32_t i;
+
+        /* Response: ThrottleTimeMs */
+        rd_kafka_buf_write_i32(resp, 0);
+
+        /* GroupId */
+        rd_kafka_buf_read_str(rkbuf, &GroupId);
+
+        /* MemberId */
+        rd_kafka_buf_read_str(rkbuf, &MemberId);
+
+        /* MemberEpoch */
+        rd_kafka_buf_read_i32(rkbuf, &MemberEpoch);
+
+        /* InstanceId */
+        rd_kafka_buf_read_str(rkbuf, &InstanceId);
+
+        /* RackId */
+        rd_kafka_buf_read_str(rkbuf, &RackId);
+
+        /* RebalanceTimeoutMs */
+        rd_kafka_buf_read_i32(rkbuf, &RebalanceTimeoutMs);
+
+        /* #SubscribedTopicNames */
+        rd_kafka_buf_read_arraycnt(rkbuf, &SubscribedTopicNamesCnt,
+                                   RD_KAFKAP_TOPICS_MAX);
+        SubscribedTopicNames =
+            rd_calloc(SubscribedTopicNamesCnt, sizeof(rd_kafkap_str_t));
+        for (i = 0; i < SubscribedTopicNamesCnt; i++) {
+                /* SubscribedTopicNames[i] */
+                rd_kafka_buf_read_str(rkbuf, &SubscribedTopicNames[i]);
+        }
+
+        /* SubscribedTopicRegex */
+        rd_kafka_buf_read_str(rkbuf, &SubscribedTopicRegex);
+
+        /* ServerAssignor */
+        rd_kafka_buf_read_str(rkbuf, &ServerAssignor);
+
+        /* #ClientAssignors */
+        rd_kafka_buf_read_arraycnt(rkbuf, &ClientAssignorsCnt, 100);
+        for (i = 0; i < ClientAssignorsCnt; i++) {
+                rd_kafkap_str_t Name;
+                int8_t Reason;
+                int16_t MinimumVersion, MaximumVersion, MetadataVersion;
+                rd_kafkap_bytes_t MetadataBytes;
+
+                /* Skip client assignors as they aren't supported still */
+
+                /* Name */
+                rd_kafka_buf_read_str(rkbuf, &Name);
+
+                /* MinimumVersion */
+                rd_kafka_buf_read_i16(rkbuf, &MinimumVersion);
+
+                /* MaximumVersion */
+                rd_kafka_buf_read_i16(rkbuf, &MaximumVersion);
+
+                /* Reason */
+                rd_kafka_buf_read_i8(rkbuf, &Reason);
+
+                /* MetadataVersion */
+                rd_kafka_buf_read_i16(rkbuf, &MetadataVersion);
+
+                /* MetadataBytes */
+                rd_kafka_buf_read_kbytes(rkbuf, &MetadataBytes);
+
+                rd_kafka_buf_skip_tags(rkbuf);
+        }
+
+        /* #TopicPartitions */
+        rd_kafka_buf_read_arraycnt(rkbuf, &TopicPartitionsCnt,
+                                   RD_KAFKAP_PARTITIONS_MAX);
+        rktparlist = rd_kafka_topic_partition_list_new(TopicPartitionsCnt);
+        for (i = 0; i < TopicPartitionsCnt; i++) {
+                // rd_kafka_mock_topic_t *mtopic;
+                int32_t PartitionsCnt;
+                int64_t TopicId;
+                int j;
+
+                /* TopicId */
+                rd_kafka_buf_read_i64(rkbuf, &TopicId);
+                rd_kafka_buf_read_i64(rkbuf, &TopicId);
+
+                rd_kafka_mock_topic_find_by_id(mcluster, TopicId);
+
+                /* #Partitions */
+                rd_kafka_buf_read_arraycnt(rkbuf, &PartitionsCnt,
+                                           RD_KAFKAP_PARTITIONS_MAX);
+                for (j = 0; j < PartitionsCnt; j++) {
+                        int32_t Partition;
+
+                        /* Partitions[j] */
+                        rd_kafka_buf_read_i32(rkbuf, &Partition);
+
+                        rd_kafka_topic_partition_list_add(rktparlist, "",
+                                                          Partition);
+                }
+
+                rd_kafka_buf_skip_tags(rkbuf);
+        }
+
+        rd_kafka_mock_connection_send_response(mconn, resp);
+
+        rd_free(SubscribedTopicNames);
+        rd_kafka_topic_partition_list_destroy(rktparlist);
+        return 0;
+
+err_parse:
+        RD_IF_FREE(SubscribedTopicNames, rd_free);
+        RD_IF_FREE(rktparlist, rd_kafka_topic_partition_list_destroy);
+        rd_kafka_buf_destroy(resp);
+        return -1;
+}
+
 
 /**
  * @brief Default request handlers
@@ -2136,6 +2263,8 @@ const struct rd_kafka_mock_api_handler
         [RD_KAFKAP_EndTxn]          = {0, 1, -1, rd_kafka_mock_handle_EndTxn},
         [RD_KAFKAP_OffsetForLeaderEpoch] =
             {2, 2, -1, rd_kafka_mock_handle_OffsetForLeaderEpoch},
+        [RD_KAFKAP_ConsumerGroupHeartbeat] =
+            {0, 0, 0, rd_kafka_mock_handle_ConsumerGroupHeartbeat},
 };
 
 

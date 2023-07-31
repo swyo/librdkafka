@@ -615,6 +615,7 @@ rd_kafka_mock_topic_new(rd_kafka_mock_cluster_t *mcluster,
         int i;
 
         mtopic          = rd_calloc(1, sizeof(*mtopic));
+        mtopic->id      = 0;
         mtopic->name    = rd_strdup(topic);
         mtopic->cluster = mcluster;
 
@@ -661,6 +662,20 @@ rd_kafka_mock_topic_find_by_kstr(const rd_kafka_mock_cluster_t *mcluster,
                 if (!strncmp(mtopic->name, kname->str,
                              RD_KAFKAP_STR_LEN(kname)) &&
                     mtopic->name[RD_KAFKAP_STR_LEN(kname)] == '\0')
+                        return (rd_kafka_mock_topic_t *)mtopic;
+        }
+
+        return NULL;
+}
+
+
+rd_kafka_mock_topic_t *
+rd_kafka_mock_topic_find_by_id(const rd_kafka_mock_cluster_t *mcluster,
+                               int64_t id) {
+        const rd_kafka_mock_topic_t *mtopic;
+
+        TAILQ_FOREACH(mtopic, &mcluster->topics, link) {
+                if (mtopic->id == id)
                         return (rd_kafka_mock_topic_t *)mtopic;
         }
 
