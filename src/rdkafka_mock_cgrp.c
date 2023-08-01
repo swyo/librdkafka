@@ -638,7 +638,7 @@ static void rd_kafka_mock_cgrp_generic_session_tmr_cb(rd_kafka_timers_t *rkts,
 void rd_kafka_mock_cgrp_generic_destroy(rd_kafka_mock_cgrp_generic_t *mcgrp) {
         rd_kafka_mock_cgrp_generic_member_t *member;
 
-        TAILQ_REMOVE(&mcgrp->cluster->cgrps, mcgrp, link);
+        TAILQ_REMOVE(&mcgrp->cluster->cgrps_generic, mcgrp, link);
 
         rd_kafka_timer_stop(&mcgrp->cluster->timers, &mcgrp->rebalance_tmr,
                             rd_true);
@@ -658,7 +658,7 @@ rd_kafka_mock_cgrp_generic_t *
 rd_kafka_mock_cgrp_generic_find(rd_kafka_mock_cluster_t *mcluster,
                                 const rd_kafkap_str_t *GroupId) {
         rd_kafka_mock_cgrp_generic_t *mcgrp;
-        TAILQ_FOREACH(mcgrp, &mcluster->cgrps, link) {
+        TAILQ_FOREACH(mcgrp, &mcluster->cgrps_generic, link) {
                 if (!rd_kafkap_str_cmp_str(GroupId, mcgrp->id))
                         return mcgrp;
         }
@@ -668,7 +668,7 @@ rd_kafka_mock_cgrp_generic_find(rd_kafka_mock_cluster_t *mcluster,
 
 
 /**
- * @brief Find or create a consumer group
+ * @brief Find or create a generic consumer group
  */
 rd_kafka_mock_cgrp_generic_t *
 rd_kafka_mock_cgrp_generic_get(rd_kafka_mock_cluster_t *mcluster,
@@ -693,7 +693,7 @@ rd_kafka_mock_cgrp_generic_get(rd_kafka_mock_cluster_t *mcluster,
                              1000 * 1000 /*1s*/,
                              rd_kafka_mock_cgrp_generic_session_tmr_cb, mcgrp);
 
-        TAILQ_INSERT_TAIL(&mcluster->cgrps, mcgrp, link);
+        TAILQ_INSERT_TAIL(&mcluster->cgrps_generic, mcgrp, link);
 
         return mcgrp;
 }
@@ -703,11 +703,12 @@ rd_kafka_mock_cgrp_generic_get(rd_kafka_mock_cluster_t *mcluster,
  * @brief A client connection closed, check if any cgrp has any state
  *        for this connection that needs to be cleared.
  */
-void rd_kafka_mock_cgrps_connection_closed(rd_kafka_mock_cluster_t *mcluster,
-                                           rd_kafka_mock_connection_t *mconn) {
+void rd_kafka_mock_cgrps_generic_connection_closed(
+    rd_kafka_mock_cluster_t *mcluster,
+    rd_kafka_mock_connection_t *mconn) {
         rd_kafka_mock_cgrp_generic_t *mcgrp;
 
-        TAILQ_FOREACH(mcgrp, &mcluster->cgrps, link) {
+        TAILQ_FOREACH(mcgrp, &mcluster->cgrps_generic, link) {
                 rd_kafka_mock_cgrp_generic_member_t *member, *tmp;
                 TAILQ_FOREACH_SAFE(member, &mcgrp->members, link, tmp) {
                         if (member->conn == mconn) {
@@ -719,4 +720,187 @@ void rd_kafka_mock_cgrps_connection_closed(rd_kafka_mock_cluster_t *mcluster,
                         }
                 }
         }
+}
+
+
+static void rd_kafka_mock_cgrp_consumer_member_destroy(
+    rd_kafka_mock_cgrp_consumer_t *mcgrp,
+    rd_kafka_mock_cgrp_consumer_member_t *member) {
+        rd_assert(mcgrp->member_cnt > 0);
+        TAILQ_REMOVE(&mcgrp->members, member, link);
+        mcgrp->member_cnt--;
+
+        rd_free(member->id);
+
+        if (member->instance_id)
+                rd_free(member->instance_id);
+
+        rd_free(member);
+}
+
+
+/**
+ * @brief Member is explicitly leaving the group (through a last heartbeat)
+ */
+rd_kafka_resp_err_t rd_kafka_mock_cgrp_consumer_member_leave(
+    rd_kafka_mock_cgrp_consumer_t *mcgrp,
+    rd_kafka_mock_cgrp_consumer_member_t *member) {
+
+        rd_kafka_dbg(mcgrp->cluster->rk, MOCK, "MOCK",
+                     "Member %s is leaving group %s", member->id, mcgrp->id);
+
+        rd_kafka_mock_cgrp_consumer_member_destroy(mcgrp, member);
+
+        // rd_kafka_mock_cgrp_consumer_rebalance(mcgrp, "explicit member
+        // leave");
+
+        return RD_KAFKA_RESP_ERR_NO_ERROR;
+}
+
+
+rd_kafka_mock_cgrp_consumer_t *
+rd_kafka_mock_cgrp_consumer_find(rd_kafka_mock_cluster_t *mcluster,
+                                 const rd_kafkap_str_t *GroupId) {
+        rd_kafka_mock_cgrp_consumer_t *mcgrp;
+        TAILQ_FOREACH(mcgrp, &mcluster->cgrps_consumer, link) {
+                if (!rd_kafkap_str_cmp_str(GroupId, mcgrp->id))
+                        return mcgrp;
+        }
+
+        return NULL;
+}
+
+
+/**
+ * @brief Check if any members have exceeded the session timeout.
+ */
+static void rd_kafka_mock_cgrp_consumer_session_tmr_cb(rd_kafka_timers_t *rkts,
+                                                       void *arg) {
+        rd_kafka_mock_cgrp_consumer_t *mcgrp = arg;
+        rd_kafka_mock_cgrp_consumer_member_t *member, *tmp;
+        rd_ts_t now     = rd_clock();
+        int timeout_cnt = 0;
+
+        TAILQ_FOREACH_SAFE(member, &mcgrp->members, link, tmp) {
+                if (member->ts_last_activity +
+                        (mcgrp->session_timeout_ms * 1000) >
+                    now)
+                        continue;
+
+                rd_kafka_dbg(mcgrp->cluster->rk, MOCK, "MOCK",
+                             "Member %s session timed out for group %s",
+                             member->id, mcgrp->id);
+
+                rd_kafka_mock_cgrp_consumer_member_destroy(mcgrp, member);
+                timeout_cnt++;
+        }
+
+        // if (timeout_cnt)
+        //         rd_kafka_mock_cgrp_generic_rebalance(mcgrp, "member
+        //         timeout");
+}
+
+
+/**
+ * @brief Find or create a "consumer" consumer group
+ */
+rd_kafka_mock_cgrp_consumer_t *
+rd_kafka_mock_cgrp_consumer_get(rd_kafka_mock_cluster_t *mcluster,
+                                const rd_kafkap_str_t *GroupId) {
+        rd_kafka_mock_cgrp_consumer_t *mcgrp;
+
+        mcgrp = rd_kafka_mock_cgrp_consumer_find(mcluster, GroupId);
+        if (mcgrp)
+                return mcgrp;
+
+        mcgrp          = rd_calloc(1, sizeof(*mcgrp));
+        mcgrp->cluster = mcluster;
+        mcgrp->id      = RD_KAFKAP_STR_DUP(GroupId);
+        TAILQ_INIT(&mcgrp->members);
+        rd_kafka_timer_start(&mcluster->timers, &mcgrp->session_tmr,
+                             1000 * 1000 /*1s*/,
+                             rd_kafka_mock_cgrp_consumer_session_tmr_cb, mcgrp);
+
+        TAILQ_INSERT_TAIL(&mcluster->cgrps_consumer, mcgrp, link);
+
+        return mcgrp;
+}
+
+
+/**
+ * @brief Mark member as active (restart session timer)
+ */
+void rd_kafka_mock_cgrp_consumer_member_active(
+    rd_kafka_mock_cgrp_consumer_t *mcgrp,
+    rd_kafka_mock_cgrp_consumer_member_t *member) {
+        rd_kafka_dbg(mcgrp->cluster->rk, MOCK, "MOCK",
+                     "Marking mock consumer group member %s as active",
+                     member->id);
+        member->ts_last_activity = rd_clock();
+}
+
+
+void rd_kafka_mock_cgrp_consumer_destroy(rd_kafka_mock_cgrp_consumer_t *mcgrp) {
+        rd_kafka_mock_cgrp_consumer_member_t *member;
+
+        TAILQ_REMOVE(&mcgrp->cluster->cgrps_consumer, mcgrp, link);
+
+        rd_kafka_timer_stop(&mcgrp->cluster->timers, &mcgrp->rebalance_tmr,
+                            rd_true);
+        rd_kafka_timer_stop(&mcgrp->cluster->timers, &mcgrp->session_tmr,
+                            rd_true);
+        rd_free(mcgrp->id);
+        while ((member = TAILQ_FIRST(&mcgrp->members)))
+                rd_kafka_mock_cgrp_consumer_member_destroy(mcgrp, member);
+        rd_free(mcgrp);
+}
+
+
+rd_kafka_mock_cgrp_consumer_member_t *rd_kafka_mock_cgrp_consumer_member_find(
+    const rd_kafka_mock_cgrp_consumer_t *mcgrp,
+    const rd_kafkap_str_t *MemberId) {
+        const rd_kafka_mock_cgrp_consumer_member_t *member;
+        TAILQ_FOREACH(member, &mcgrp->members, link) {
+                if (!rd_kafkap_str_cmp_str(MemberId, member->id))
+                        return (rd_kafka_mock_cgrp_consumer_member_t *)member;
+        }
+
+        return NULL;
+}
+
+
+rd_kafka_mock_cgrp_consumer_member_t *
+rd_kafka_mock_cgrp_consumer_member_add(rd_kafka_mock_cgrp_consumer_t *mcgrp,
+                                       rd_kafka_buf_t *resp,
+                                       const rd_kafkap_str_t *MemberId,
+                                       const rd_kafkap_str_t *InstanceId,
+                                       int session_timeout_ms) {
+        rd_kafka_mock_cgrp_consumer_member_t *member;
+
+        /* Find member */
+        member = rd_kafka_mock_cgrp_consumer_member_find(mcgrp, MemberId);
+        if (!member) {
+                /* Not found, add member */
+                member = rd_calloc(1, sizeof(*member));
+
+                if (!RD_KAFKAP_STR_LEN(MemberId)) {
+                        /* Generate a member id */
+                        char memberid[32];
+                        rd_snprintf(memberid, sizeof(memberid), "%p", member);
+                        member->id = rd_strdup(memberid);
+                } else
+                        member->id = RD_KAFKAP_STR_DUP(MemberId);
+
+                if (RD_KAFKAP_STR_LEN(InstanceId))
+                        member->instance_id = RD_KAFKAP_STR_DUP(InstanceId);
+
+                TAILQ_INSERT_TAIL(&mcgrp->members, member, link);
+                mcgrp->member_cnt++;
+        }
+
+        mcgrp->session_timeout_ms = session_timeout_ms;
+
+        rd_kafka_mock_cgrp_consumer_member_active(mcgrp, member);
+
+        return member;
 }

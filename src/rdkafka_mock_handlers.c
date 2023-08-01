@@ -2124,6 +2124,10 @@ rd_kafka_mock_handle_ConsumerGroupHeartbeat(rd_kafka_mock_connection_t *mconn,
         int32_t MemberEpoch, RebalanceTimeoutMs, SubscribedTopicNamesCnt,
             ClientAssignorsCnt, TopicPartitionsCnt;
         int32_t i;
+        rd_kafka_resp_err_t err;
+        rd_kafka_mock_cgrp_consumer_t *mcgrp         = NULL;
+        rd_kafka_mock_broker_t *mrkb                 = NULL;
+        rd_kafka_mock_cgrp_consumer_member_t *member = NULL;
 
         /* Response: ThrottleTimeMs */
         rd_kafka_buf_write_i32(resp, 0);
@@ -2224,6 +2228,61 @@ rd_kafka_mock_handle_ConsumerGroupHeartbeat(rd_kafka_mock_connection_t *mconn,
 
                 rd_kafka_buf_skip_tags(rkbuf);
         }
+
+        /* Inject error, if any */
+        err = rd_kafka_mock_next_request_error(mconn, resp);
+
+        if (!err) {
+                mrkb = rd_kafka_mock_cluster_get_coord(
+                    mcluster, RD_KAFKA_COORD_GROUP, &GroupId);
+
+                if (!mrkb)
+                        err = RD_KAFKA_RESP_ERR_COORDINATOR_NOT_AVAILABLE;
+                else if (mrkb != mconn->broker)
+                        err = RD_KAFKA_RESP_ERR_NOT_COORDINATOR;
+        }
+
+        if (!err) {
+                mcgrp = rd_kafka_mock_cgrp_consumer_get(mcluster, &GroupId);
+                rd_assert(mcgrp);
+
+                member = rd_kafka_mock_cgrp_consumer_member_add(
+                    mcgrp, resp, &MemberId, &InstanceId,
+                    /* TODO: use consumer group configuration */
+                    30000);
+                rd_assert(member);
+        }
+
+        /*
+         * Construct response
+         */
+        /* Response: Throttle */
+        rd_kafka_buf_write_i32(resp, 0);
+
+        /* Response: ErrorCode */
+        rd_kafka_buf_write_i16(resp, err);
+
+        /* Response: ErrorMessage */
+        rd_kafka_buf_write_str(resp, rd_kafka_err2str(err), -1);
+
+        /* Response: MemberId */
+        if (!err && member)
+                rd_kafka_buf_write_str(resp, member->id, -1);
+        else
+                rd_kafka_buf_write_str(resp, NULL, -1);
+
+        /* Response: MemberEpoch */
+        rd_kafka_buf_write_i32(resp, MemberEpoch);
+
+        /* Response: ShouldComputeAssignment */
+        rd_kafka_buf_write_bool(resp, rd_false);
+
+        /* Response: HeartbeatIntervalMs */
+        rd_kafka_buf_write_i32(
+            resp, 3000); /* TODO: use consumer group configuration */
+
+        /* Response: Assignment */
+        rd_kafka_buf_write_arraycnt(resp, -1); /* TODO: now it's always null */
 
         rd_kafka_mock_connection_send_response(mconn, resp);
 

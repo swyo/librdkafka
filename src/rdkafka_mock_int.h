@@ -127,8 +127,9 @@ typedef struct rd_kafka_mock_cgrp_consumer_s {
         int session_timeout_ms;                  /**< Session timeout */
         rd_kafka_timer_t session_tmr;            /**< Session timeout timer */
         rd_kafka_timer_t rebalance_tmr;          /**< Rebalance state timer */
-        TAILQ_HEAD(, rd_kafka_mock_cgrp_generic_member_s)
-        members; /**< Group members */
+        TAILQ_HEAD(, rd_kafka_mock_cgrp_consumer_member_s)
+        members;        /**< Group members */
+        int member_cnt; /**< Number of group members */
 } rd_kafka_mock_cgrp_consumer_t;
 
 
@@ -138,7 +139,7 @@ typedef struct rd_kafka_mock_cgrp_consumer_s {
 typedef struct rd_kafka_mock_cgrp_consumer_member_s {
         TAILQ_ENTRY(rd_kafka_mock_cgrp_consumer_member_s) link;
         char *id;                 /**< MemberId */
-        char *group_instance_id;  /**< Group instance id */
+        char *instance_id;        /**< Group instance id */
         rd_ts_t ts_last_activity; /**< Last activity, e.g., Heartbeat */
 } rd_kafka_mock_cgrp_consumer_member_t;
 
@@ -374,7 +375,9 @@ struct rd_kafka_mock_cluster_s {
         TAILQ_HEAD(, rd_kafka_mock_topic_s) topics;
         int topic_cnt;
 
-        TAILQ_HEAD(, rd_kafka_mock_cgrp_generic_s) cgrps;
+        TAILQ_HEAD(, rd_kafka_mock_cgrp_generic_s) cgrps_generic;
+
+        TAILQ_HEAD(, rd_kafka_mock_cgrp_consumer_s) cgrps_consumer;
 
         /** Explicit coordinators (set with mock_set_coordinator()) */
         TAILQ_HEAD(, rd_kafka_mock_coord_s) coords;
@@ -563,9 +566,40 @@ rd_kafka_mock_cgrp_generic_t *
 rd_kafka_mock_cgrp_generic_get(rd_kafka_mock_cluster_t *mcluster,
                                const rd_kafkap_str_t *GroupId,
                                const rd_kafkap_str_t *ProtocolType);
-void rd_kafka_mock_cgrps_connection_closed(rd_kafka_mock_cluster_t *mcluster,
-                                           rd_kafka_mock_connection_t *mconn);
+void rd_kafka_mock_cgrps_generic_connection_closed(
+    rd_kafka_mock_cluster_t *mcluster,
+    rd_kafka_mock_connection_t *mconn);
 
+/* "consumer" consumer group (KIP-848) */
+
+void rd_kafka_mock_cgrp_consumer_member_active(
+    rd_kafka_mock_cgrp_consumer_t *mcgrp,
+    rd_kafka_mock_cgrp_consumer_member_t *member);
+
+void rd_kafka_mock_cgrp_consumer_destroy(rd_kafka_mock_cgrp_consumer_t *mcgrp);
+
+rd_kafka_mock_cgrp_consumer_t *
+rd_kafka_mock_cgrp_consumer_find(rd_kafka_mock_cluster_t *mcluster,
+                                 const rd_kafkap_str_t *GroupId);
+
+rd_kafka_mock_cgrp_consumer_t *
+rd_kafka_mock_cgrp_consumer_get(rd_kafka_mock_cluster_t *mcluster,
+                                const rd_kafkap_str_t *GroupId);
+
+rd_kafka_resp_err_t rd_kafka_mock_cgrp_consumer_member_leave(
+    rd_kafka_mock_cgrp_consumer_t *mcgrp,
+    rd_kafka_mock_cgrp_consumer_member_t *member);
+
+rd_kafka_mock_cgrp_consumer_member_t *rd_kafka_mock_cgrp_consumer_member_find(
+    const rd_kafka_mock_cgrp_consumer_t *mcgrp,
+    const rd_kafkap_str_t *MemberId);
+
+rd_kafka_mock_cgrp_consumer_member_t *
+rd_kafka_mock_cgrp_consumer_member_add(rd_kafka_mock_cgrp_consumer_t *mcgrp,
+                                       rd_kafka_buf_t *resp,
+                                       const rd_kafkap_str_t *MemberId,
+                                       const rd_kafkap_str_t *InstanceId,
+                                       int session_timeout_ms);
 
 /**
  *@}
