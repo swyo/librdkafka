@@ -615,7 +615,7 @@ rd_kafka_mock_topic_new(rd_kafka_mock_cluster_t *mcluster,
         int i;
 
         mtopic          = rd_calloc(1, sizeof(*mtopic));
-        mtopic->id      = 0;
+        mtopic->id      = rd_jitter(0, 1000000);
         mtopic->name    = rd_strdup(topic);
         mtopic->cluster = mcluster;
 
@@ -2426,7 +2426,7 @@ rd_kafka_mock_cluster_op_serve(rd_kafka_t *rk,
 static void rd_kafka_mock_cluster_destroy0(rd_kafka_mock_cluster_t *mcluster) {
         rd_kafka_mock_topic_t *mtopic;
         rd_kafka_mock_broker_t *mrkb;
-        rd_kafka_mock_cgrp_t *mcgrp;
+        rd_kafka_mock_cgrp_generic_t *mcgrp;
         rd_kafka_mock_coord_t *mcoord;
         rd_kafka_mock_error_stack_t *errstack;
         thrd_t dummy_rkb_thread;
@@ -2439,7 +2439,7 @@ static void rd_kafka_mock_cluster_destroy0(rd_kafka_mock_cluster_t *mcluster) {
                 rd_kafka_mock_broker_destroy(mrkb);
 
         while ((mcgrp = TAILQ_FIRST(&mcluster->cgrps)))
-                rd_kafka_mock_cgrp_destroy(mcgrp);
+                rd_kafka_mock_cgrp_generic_destroy(mcgrp);
 
         while ((mcoord = TAILQ_FIRST(&mcluster->coords)))
                 rd_kafka_mock_coord_destroy(mcluster, mcoord);
