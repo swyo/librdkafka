@@ -722,6 +722,70 @@ void rd_kafka_mock_cgrps_generic_connection_closed(
         }
 }
 
+// static void rd_kafka_mock_cgrp_consumer_member_assignment(
+//     rd_kafka_mock_cgrp_consumer_t *mcgrp,
+//     rd_kafka_mock_cgrp_consumer_member_t *member) {
+// }
+
+/**
+ * @brief Mark member as active (restart session timer)
+ */
+void rd_kafka_mock_cgrp_consumer_member_active(
+    rd_kafka_mock_cgrp_consumer_t *mcgrp,
+    rd_kafka_mock_cgrp_consumer_member_t *member) {
+        rd_kafka_dbg(mcgrp->cluster->rk, MOCK, "MOCK",
+                     "Marking mock consumer group member %s as active",
+                     member->id);
+        member->ts_last_activity = rd_clock();
+}
+
+rd_kafka_mock_cgrp_consumer_member_t *rd_kafka_mock_cgrp_consumer_member_find(
+    const rd_kafka_mock_cgrp_consumer_t *mcgrp,
+    const rd_kafkap_str_t *MemberId) {
+        const rd_kafka_mock_cgrp_consumer_member_t *member;
+        TAILQ_FOREACH(member, &mcgrp->members, link) {
+                if (!rd_kafkap_str_cmp_str(MemberId, member->id))
+                        return (rd_kafka_mock_cgrp_consumer_member_t *)member;
+        }
+
+        return NULL;
+}
+
+rd_kafka_mock_cgrp_consumer_member_t *
+rd_kafka_mock_cgrp_consumer_member_add(rd_kafka_mock_cgrp_consumer_t *mcgrp,
+                                       rd_kafka_buf_t *resp,
+                                       const rd_kafkap_str_t *MemberId,
+                                       const rd_kafkap_str_t *InstanceId,
+                                       int session_timeout_ms) {
+        rd_kafka_mock_cgrp_consumer_member_t *member;
+
+        /* Find member */
+        member = rd_kafka_mock_cgrp_consumer_member_find(mcgrp, MemberId);
+        if (!member) {
+                /* Not found, add member */
+                member = rd_calloc(1, sizeof(*member));
+
+                if (!RD_KAFKAP_STR_LEN(MemberId)) {
+                        /* Generate a member id */
+                        char memberid[32];
+                        rd_snprintf(memberid, sizeof(memberid), "%p", member);
+                        member->id = rd_strdup(memberid);
+                } else
+                        member->id = RD_KAFKAP_STR_DUP(MemberId);
+
+                if (RD_KAFKAP_STR_LEN(InstanceId))
+                        member->instance_id = RD_KAFKAP_STR_DUP(InstanceId);
+
+                TAILQ_INSERT_TAIL(&mcgrp->members, member, link);
+                mcgrp->member_cnt++;
+        }
+
+        mcgrp->session_timeout_ms = session_timeout_ms;
+
+        rd_kafka_mock_cgrp_consumer_member_active(mcgrp, member);
+
+        return member;
+}
 
 static void rd_kafka_mock_cgrp_consumer_member_destroy(
     rd_kafka_mock_cgrp_consumer_t *mcgrp,
@@ -757,9 +821,8 @@ rd_kafka_resp_err_t rd_kafka_mock_cgrp_consumer_member_leave(
         return RD_KAFKA_RESP_ERR_NO_ERROR;
 }
 
-
 rd_kafka_mock_cgrp_consumer_t *
-rd_kafka_mock_cgrp_consumer_find(rd_kafka_mock_cluster_t *mcluster,
+rd_kafka_mock_cgrp_consumer_find(const rd_kafka_mock_cluster_t *mcluster,
                                  const rd_kafkap_str_t *GroupId) {
         rd_kafka_mock_cgrp_consumer_t *mcgrp;
         TAILQ_FOREACH(mcgrp, &mcluster->cgrps_consumer, link) {
@@ -827,18 +890,33 @@ rd_kafka_mock_cgrp_consumer_get(rd_kafka_mock_cluster_t *mcluster,
 }
 
 
-/**
- * @brief Mark member as active (restart session timer)
- */
-void rd_kafka_mock_cgrp_consumer_member_active(
-    rd_kafka_mock_cgrp_consumer_t *mcgrp,
-    rd_kafka_mock_cgrp_consumer_member_t *member) {
-        rd_kafka_dbg(mcgrp->cluster->rk, MOCK, "MOCK",
-                     "Marking mock consumer group member %s as active",
-                     member->id);
-        member->ts_last_activity = rd_clock();
-}
+void rd_kafka_mock_cgrp_consumer_assignment(
+    const rd_kafka_mock_cluster_t *mcluster,
+    const char *group_id,
+    const char *member_id,
+    const rd_kafka_topic_partition_list_t *rktparlist) {
+        rd_kafka_mock_cgrp_consumer_member_t *cgrp_member;
+        rd_kafkap_str_t *group_id_str =
+            rd_kafkap_str_new(group_id, strlen(group_id));
+        rd_kafkap_str_t *member_id_str =
+            rd_kafkap_str_new(member_id, strlen(member_id));
+        rd_kafka_mock_cgrp_consumer_t *cgrp =
+            rd_kafka_mock_cgrp_consumer_find(mcluster, group_id_str);
+        if (!cgrp)
+                goto destroy;
 
+        cgrp_member =
+            rd_kafka_mock_cgrp_consumer_member_find(cgrp, member_id_str);
+
+        if (!cgrp_member)
+                goto destroy;
+
+
+
+destroy:
+        rd_kafkap_str_destroy(group_id_str);
+        rd_kafkap_str_destroy(member_id_str);
+}
 
 void rd_kafka_mock_cgrp_consumer_destroy(rd_kafka_mock_cgrp_consumer_t *mcgrp) {
         rd_kafka_mock_cgrp_consumer_member_t *member;
@@ -853,54 +931,4 @@ void rd_kafka_mock_cgrp_consumer_destroy(rd_kafka_mock_cgrp_consumer_t *mcgrp) {
         while ((member = TAILQ_FIRST(&mcgrp->members)))
                 rd_kafka_mock_cgrp_consumer_member_destroy(mcgrp, member);
         rd_free(mcgrp);
-}
-
-
-rd_kafka_mock_cgrp_consumer_member_t *rd_kafka_mock_cgrp_consumer_member_find(
-    const rd_kafka_mock_cgrp_consumer_t *mcgrp,
-    const rd_kafkap_str_t *MemberId) {
-        const rd_kafka_mock_cgrp_consumer_member_t *member;
-        TAILQ_FOREACH(member, &mcgrp->members, link) {
-                if (!rd_kafkap_str_cmp_str(MemberId, member->id))
-                        return (rd_kafka_mock_cgrp_consumer_member_t *)member;
-        }
-
-        return NULL;
-}
-
-
-rd_kafka_mock_cgrp_consumer_member_t *
-rd_kafka_mock_cgrp_consumer_member_add(rd_kafka_mock_cgrp_consumer_t *mcgrp,
-                                       rd_kafka_buf_t *resp,
-                                       const rd_kafkap_str_t *MemberId,
-                                       const rd_kafkap_str_t *InstanceId,
-                                       int session_timeout_ms) {
-        rd_kafka_mock_cgrp_consumer_member_t *member;
-
-        /* Find member */
-        member = rd_kafka_mock_cgrp_consumer_member_find(mcgrp, MemberId);
-        if (!member) {
-                /* Not found, add member */
-                member = rd_calloc(1, sizeof(*member));
-
-                if (!RD_KAFKAP_STR_LEN(MemberId)) {
-                        /* Generate a member id */
-                        char memberid[32];
-                        rd_snprintf(memberid, sizeof(memberid), "%p", member);
-                        member->id = rd_strdup(memberid);
-                } else
-                        member->id = RD_KAFKAP_STR_DUP(MemberId);
-
-                if (RD_KAFKAP_STR_LEN(InstanceId))
-                        member->instance_id = RD_KAFKAP_STR_DUP(InstanceId);
-
-                TAILQ_INSERT_TAIL(&mcgrp->members, member, link);
-                mcgrp->member_cnt++;
-        }
-
-        mcgrp->session_timeout_ms = session_timeout_ms;
-
-        rd_kafka_mock_cgrp_consumer_member_active(mcgrp, member);
-
-        return member;
 }

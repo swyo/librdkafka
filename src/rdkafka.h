@@ -4477,6 +4477,20 @@ rd_kafka_consumer_group_metadata_new_with_genid(const char *group_id,
 
 
 /**
+ * @brief Get member id of a group metadata.
+ *
+ * @param group_metadata The group metadata
+ *
+ * @returns The member id contained in the passed \p group_metadata.
+ *
+ * @remark The returned pointer has the same lifetime as \p group_metadata.
+ */
+RD_EXPORT
+const char *rd_kafka_consumer_group_metadata_member_id(
+    const rd_kafka_consumer_group_metadata_t *group_metadata);
+
+
+/**
  * @brief Frees the consumer group metadata object as returned by
  *        rd_kafka_consumer_group_metadata().
  */

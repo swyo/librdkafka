@@ -579,7 +579,7 @@ void rd_kafka_mock_cgrp_consumer_member_active(
 void rd_kafka_mock_cgrp_consumer_destroy(rd_kafka_mock_cgrp_consumer_t *mcgrp);
 
 rd_kafka_mock_cgrp_consumer_t *
-rd_kafka_mock_cgrp_consumer_find(rd_kafka_mock_cluster_t *mcluster,
+rd_kafka_mock_cgrp_consumer_find(const rd_kafka_mock_cluster_t *mcluster,
                                  const rd_kafkap_str_t *GroupId);
 
 rd_kafka_mock_cgrp_consumer_t *
