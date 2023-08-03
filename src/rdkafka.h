@@ -943,6 +943,27 @@ int32_t rd_kafka_topic_partition_get_leader_epoch(
     const rd_kafka_topic_partition_t *rktpar);
 
 /**
+ * @brief TODO: write
+ *
+ * @param rktpar
+ * @param topic_id
+ * @return
+ */
+RD_EXPORT
+void rd_kafka_topic_partition_set_topic_id(rd_kafka_topic_partition_t *rktpar,
+                                           int64_t topic_id);
+
+/**
+ * @brief TODO: write
+ *
+ * @param rktpar
+ * @return
+ */
+RD_EXPORT
+int64_t
+rd_kafka_topic_partition_get_topic_id(const rd_kafka_topic_partition_t *rktpar);
+
+/**
  * @brief A growable list of Topic+Partitions.
  *
  */

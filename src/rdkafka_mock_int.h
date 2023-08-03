@@ -30,6 +30,8 @@
 #ifndef _RDKAFKA_MOCK_INT_H_
 #define _RDKAFKA_MOCK_INT_H_
 
+#include "rdkafka_request.h"
+
 /**
  * @name Mock cluster - internal data types
  *
@@ -138,9 +140,29 @@ typedef struct rd_kafka_mock_cgrp_consumer_s {
  */
 typedef struct rd_kafka_mock_cgrp_consumer_member_s {
         TAILQ_ENTRY(rd_kafka_mock_cgrp_consumer_member_s) link;
-        char *id;                 /**< MemberId */
-        char *instance_id;        /**< Group instance id */
-        rd_ts_t ts_last_activity; /**< Last activity, e.g., Heartbeat */
+        char *id;                     /**< MemberId */
+        char *instance_id;            /**< Group instance id */
+        rd_ts_t ts_last_activity;     /**< Last activity, e.g.,
+                                         ConsumerGroupHeartbeat */
+        int32_t current_member_epoch; /**< Current member epoch,
+                                       *   updated only on heartbeat. */
+        int32_t
+            target_member_epoch; /**< Target member epoch,
+                                  *   updated only when calling
+                                  *   rd_kafka_mock_cgrp_consumer_assignment. */
+        rd_kafka_topic_partition_list_t
+            *current_assignment; /**< Current assignment,
+                                  *   only updated when reported by the client.
+                                  */
+        rd_kafka_topic_partition_list_t
+            *target_assignment; /**< Target assignment,
+                                 *   only updated when calling
+                                 *   rd_kafka_mock_cgrp_consumer_assignment. */
+        rd_kafka_topic_partition_list_t
+            *returned_assignment;                /**< Returned assignment */
+        struct rd_kafka_mock_connection_s *conn; /**< Connection, may be NULL
+                                                  *   if there is no ongoing
+                                                  *   request. */
 } rd_kafka_mock_cgrp_consumer_member_t;
 
 
@@ -566,11 +588,14 @@ rd_kafka_mock_cgrp_generic_t *
 rd_kafka_mock_cgrp_generic_get(rd_kafka_mock_cluster_t *mcluster,
                                const rd_kafkap_str_t *GroupId,
                                const rd_kafkap_str_t *ProtocolType);
-void rd_kafka_mock_cgrps_generic_connection_closed(
-    rd_kafka_mock_cluster_t *mcluster,
-    rd_kafka_mock_connection_t *mconn);
 
 /* "consumer" consumer group (KIP-848) */
+
+rd_kafka_topic_partition_list_t *
+rd_kafka_mock_cgrp_consumer_member_next_assignment(
+    rd_kafka_mock_cgrp_consumer_member_t *member,
+    rd_kafka_topic_partition_list_t *current_assignment,
+    int *member_epoch);
 
 void rd_kafka_mock_cgrp_consumer_member_active(
     rd_kafka_mock_cgrp_consumer_t *mcgrp,
@@ -596,10 +621,14 @@ rd_kafka_mock_cgrp_consumer_member_t *rd_kafka_mock_cgrp_consumer_member_find(
 
 rd_kafka_mock_cgrp_consumer_member_t *
 rd_kafka_mock_cgrp_consumer_member_add(rd_kafka_mock_cgrp_consumer_t *mcgrp,
+                                       struct rd_kafka_mock_connection_s *conn,
                                        rd_kafka_buf_t *resp,
                                        const rd_kafkap_str_t *MemberId,
                                        const rd_kafkap_str_t *InstanceId,
                                        int session_timeout_ms);
+
+void rd_kafka_mock_cgrps_connection_closed(rd_kafka_mock_cluster_t *mcluster,
+                                           rd_kafka_mock_connection_t *mconn);
 
 /**
  *@}

@@ -878,8 +878,7 @@ static void rd_kafka_mock_connection_close(rd_kafka_mock_connection_t *mconn,
                      rd_sockaddr2str(&mconn->peer, RD_SOCKADDR2STR_F_PORT),
                      reason);
 
-        rd_kafka_mock_cgrps_generic_connection_closed(mconn->broker->cluster,
-                                                      mconn);
+        rd_kafka_mock_cgrps_connection_closed(mconn->broker->cluster, mconn);
 
         rd_kafka_timer_stop(&mconn->broker->cluster->timers, &mconn->write_tmr,
                             rd_true);

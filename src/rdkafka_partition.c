@@ -2579,9 +2579,15 @@ rd_kafka_topic_partition_update(rd_kafka_topic_partition_t *dst,
 
                 dstpriv->leader_epoch = srcpriv->leader_epoch;
 
+                dstpriv->current_leader_epoch = srcpriv->current_leader_epoch;
+
+                dstpriv->topic_id = srcpriv->topic_id;
+
         } else if ((dstpriv = dst->_private)) {
-                /* No private object in source, reset the leader epoch. */
-                dstpriv->leader_epoch = -1;
+                /* No private object in source, reset the fields. */
+                dstpriv->leader_epoch         = -1;
+                dstpriv->current_leader_epoch = -1;
+                dstpriv->topic_id             = 0;
         }
 }
 
@@ -2671,6 +2677,29 @@ int32_t rd_kafka_topic_partition_get_current_leader_epoch(
                 return -1;
 
         return parpriv->current_leader_epoch;
+}
+
+void rd_kafka_topic_partition_set_topic_id(rd_kafka_topic_partition_t *rktpar,
+                                           int64_t topic_id) {
+        rd_kafka_topic_partition_private_t *parpriv;
+
+        /* Avoid allocating private_t if clearing the epoch */
+        if (!topic_id && !rktpar->_private)
+                return;
+
+        parpriv = rd_kafka_topic_partition_get_private(rktpar);
+
+        parpriv->topic_id = topic_id;
+}
+
+int64_t rd_kafka_topic_partition_get_topic_id(
+    const rd_kafka_topic_partition_t *rktpar) {
+        const rd_kafka_topic_partition_private_t *parpriv;
+
+        if (!(parpriv = rktpar->_private))
+                return -1;
+
+        return parpriv->topic_id;
 }
 
 void rd_kafka_topic_partition_set_current_leader_epoch(
@@ -2979,6 +3008,19 @@ int rd_kafka_topic_partition_cmp(const void *_a, const void *_b) {
                 return RD_CMP(a->partition, b->partition);
 }
 
+
+int rd_kafka_topic_partition_by_id_cmp(const void *_a, const void *_b) {
+        const rd_kafka_topic_partition_t *a = _a;
+        const rd_kafka_topic_partition_t *b = _b;
+        int64_t topic_id_a = rd_kafka_topic_partition_get_topic_id(a);
+        int64_t topic_id_b = rd_kafka_topic_partition_get_topic_id(b);
+        int r              = topic_id_a - topic_id_b;
+        if (r)
+                return r;
+        else
+                return RD_CMP(a->partition, b->partition);
+}
+
 /** @brief Compare only the topic */
 int rd_kafka_topic_partition_cmp_topic(const void *_a, const void *_b) {
         const rd_kafka_topic_partition_t *a = _a;
@@ -3024,6 +3066,32 @@ static int rd_kafka_topic_partition_list_find0(
         return -1;
 }
 
+/**
+ * @brief Search 'rktparlist' for 'topic_id' and 'partition'.
+ * @returns the elems[] index or -1 on miss.
+ */
+static int rd_kafka_topic_partition_list_find_by_id0(
+    const rd_kafka_topic_partition_list_t *rktparlist,
+    int64_t topic_id,
+    int32_t partition,
+    int (*cmp)(const void *, const void *)) {
+        rd_kafka_topic_partition_t *rktpar =
+            rd_kafka_topic_partition_new("", partition);
+        int i, ret = -1;
+
+        rd_kafka_topic_partition_set_topic_id(rktpar, topic_id);
+
+        for (i = 0; i < rktparlist->cnt; i++) {
+                if (!cmp(rktpar, &rktparlist->elems[i])) {
+                        ret = i;
+                        break;
+                }
+        }
+
+        rd_kafka_topic_partition_destroy(rktpar);
+        return ret;
+}
+
 rd_kafka_topic_partition_t *rd_kafka_topic_partition_list_find(
     const rd_kafka_topic_partition_list_t *rktparlist,
     const char *topic,
@@ -3037,12 +3105,34 @@ rd_kafka_topic_partition_t *rd_kafka_topic_partition_list_find(
 }
 
 
+rd_kafka_topic_partition_t *rd_kafka_topic_partition_list_find_by_id(
+    const rd_kafka_topic_partition_list_t *rktparlist,
+    int64_t topic_id,
+    int32_t partition) {
+        int i = rd_kafka_topic_partition_list_find_by_id0(
+            rktparlist, topic_id, partition,
+            rd_kafka_topic_partition_by_id_cmp);
+        if (i == -1)
+                return NULL;
+        else
+                return &rktparlist->elems[i];
+}
+
 int rd_kafka_topic_partition_list_find_idx(
     const rd_kafka_topic_partition_list_t *rktparlist,
     const char *topic,
     int32_t partition) {
         return rd_kafka_topic_partition_list_find0(
             rktparlist, topic, partition, rd_kafka_topic_partition_cmp);
+}
+
+int rd_kafka_topic_partition_list_find_by_id_idx(
+    const rd_kafka_topic_partition_list_t *rktparlist,
+    int64_t topic_id,
+    int32_t partition) {
+        return rd_kafka_topic_partition_list_find_by_id0(
+            rktparlist, topic_id, partition,
+            rd_kafka_topic_partition_by_id_cmp);
 }
 
 
