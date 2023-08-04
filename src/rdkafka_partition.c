@@ -2679,6 +2679,13 @@ int32_t rd_kafka_topic_partition_get_current_leader_epoch(
         return parpriv->current_leader_epoch;
 }
 
+/**
+ * @brief TODO: write
+ *
+ * @param rktpar
+ * @param topic_id
+ * @return
+ */
 void rd_kafka_topic_partition_set_topic_id(rd_kafka_topic_partition_t *rktpar,
                                            int64_t topic_id) {
         rd_kafka_topic_partition_private_t *parpriv;
@@ -2692,6 +2699,12 @@ void rd_kafka_topic_partition_set_topic_id(rd_kafka_topic_partition_t *rktpar,
         parpriv->topic_id = topic_id;
 }
 
+/**
+ * @brief TODO: write
+ *
+ * @param rktpar
+ * @return
+ */
 int64_t rd_kafka_topic_partition_get_topic_id(
     const rd_kafka_topic_partition_t *rktpar) {
         const rd_kafka_topic_partition_private_t *parpriv;
