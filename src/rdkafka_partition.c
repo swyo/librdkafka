@@ -2587,7 +2587,7 @@ rd_kafka_topic_partition_update(rd_kafka_topic_partition_t *dst,
                 /* No private object in source, reset the fields. */
                 dstpriv->leader_epoch         = -1;
                 dstpriv->current_leader_epoch = -1;
-                dstpriv->topic_id             = 0;
+                dstpriv->topic_id = ((rd_kafka_uuid_t)RD_KAFKA_UUID_ZERO);
         }
 }
 
@@ -2687,11 +2687,12 @@ int32_t rd_kafka_topic_partition_get_current_leader_epoch(
  * @return
  */
 void rd_kafka_topic_partition_set_topic_id(rd_kafka_topic_partition_t *rktpar,
-                                           int64_t topic_id) {
+                                           rd_kafka_uuid_t topic_id) {
         rd_kafka_topic_partition_private_t *parpriv;
 
         /* Avoid allocating private_t if clearing the epoch */
-        if (!topic_id && !rktpar->_private)
+        if (!rd_kafka_uuid_cmp(topic_id, RD_KAFKA_UUID_ZERO) &&
+            !rktpar->_private)
                 return;
 
         parpriv = rd_kafka_topic_partition_get_private(rktpar);
@@ -2705,12 +2706,12 @@ void rd_kafka_topic_partition_set_topic_id(rd_kafka_topic_partition_t *rktpar,
  * @param rktpar
  * @return
  */
-int64_t rd_kafka_topic_partition_get_topic_id(
+rd_kafka_uuid_t rd_kafka_topic_partition_get_topic_id(
     const rd_kafka_topic_partition_t *rktpar) {
         const rd_kafka_topic_partition_private_t *parpriv;
 
         if (!(parpriv = rktpar->_private))
-                return -1;
+                return RD_KAFKA_UUID_ZERO;
 
         return parpriv->topic_id;
 }
@@ -2842,8 +2843,10 @@ rd_kafka_topic_partition_t *rd_kafka_topic_partition_list_add0(
                         parpriv_copy->rktp =
                             rd_kafka_toppar_keep_fl(func, line, parpriv->rktp);
                 }
-                parpriv_copy->leader_epoch         = parpriv->leader_epoch;
-                parpriv_copy->current_leader_epoch = parpriv->leader_epoch;
+                parpriv_copy->leader_epoch = parpriv->leader_epoch;
+                parpriv_copy->current_leader_epoch =
+                    parpriv->current_leader_epoch;
+                parpriv_copy->topic_id = parpriv->topic_id;
         } else if (rktp) {
                 rd_kafka_topic_partition_private_t *parpriv_copy =
                     rd_kafka_topic_partition_get_private(rktpar);
@@ -3025,9 +3028,9 @@ int rd_kafka_topic_partition_cmp(const void *_a, const void *_b) {
 int rd_kafka_topic_partition_by_id_cmp(const void *_a, const void *_b) {
         const rd_kafka_topic_partition_t *a = _a;
         const rd_kafka_topic_partition_t *b = _b;
-        int64_t topic_id_a = rd_kafka_topic_partition_get_topic_id(a);
-        int64_t topic_id_b = rd_kafka_topic_partition_get_topic_id(b);
-        int r              = topic_id_a - topic_id_b;
+        rd_kafka_uuid_t topic_id_a = rd_kafka_topic_partition_get_topic_id(a);
+        rd_kafka_uuid_t topic_id_b = rd_kafka_topic_partition_get_topic_id(b);
+        int r                      = rd_kafka_uuid_cmp(topic_id_a, topic_id_b);
         if (r)
                 return r;
         else
@@ -3085,7 +3088,7 @@ static int rd_kafka_topic_partition_list_find0(
  */
 static int rd_kafka_topic_partition_list_find_by_id0(
     const rd_kafka_topic_partition_list_t *rktparlist,
-    int64_t topic_id,
+    rd_kafka_uuid_t topic_id,
     int32_t partition,
     int (*cmp)(const void *, const void *)) {
         rd_kafka_topic_partition_t *rktpar =
@@ -3120,7 +3123,7 @@ rd_kafka_topic_partition_t *rd_kafka_topic_partition_list_find(
 
 rd_kafka_topic_partition_t *rd_kafka_topic_partition_list_find_by_id(
     const rd_kafka_topic_partition_list_t *rktparlist,
-    int64_t topic_id,
+    rd_kafka_uuid_t topic_id,
     int32_t partition) {
         int i = rd_kafka_topic_partition_list_find_by_id0(
             rktparlist, topic_id, partition,
@@ -3141,7 +3144,7 @@ int rd_kafka_topic_partition_list_find_idx(
 
 int rd_kafka_topic_partition_list_find_by_id_idx(
     const rd_kafka_topic_partition_list_t *rktparlist,
-    int64_t topic_id,
+    rd_kafka_uuid_t topic_id,
     int32_t partition) {
         return rd_kafka_topic_partition_list_find_by_id0(
             rktparlist, topic_id, partition,
@@ -4098,6 +4101,8 @@ void rd_kafka_topic_partition_list_update(
                 s_priv               = rd_kafka_topic_partition_get_private(s);
                 d_priv               = rd_kafka_topic_partition_get_private(d);
                 d_priv->leader_epoch = s_priv->leader_epoch;
+                d_priv->current_leader_epoch = s_priv->current_leader_epoch;
+                d_priv->topic_id             = s_priv->topic_id;
         }
 }
 

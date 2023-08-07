@@ -2220,12 +2220,11 @@ rd_kafka_mock_handle_ConsumerGroupHeartbeat(rd_kafka_mock_connection_t *mconn,
                     rd_kafka_topic_partition_list_new(TopicPartitionsCnt);
         for (i = 0; i < TopicPartitionsCnt; i++) {
                 int32_t PartitionsCnt;
-                int64_t TopicId;
+                rd_kafka_uuid_t TopicId;
                 int j;
 
                 /* TopicId */
-                rd_kafka_buf_read_i64(rkbuf, &TopicId);
-                rd_kafka_buf_read_i64(rkbuf, &TopicId);
+                rd_kafka_buf_read_uuid(rkbuf, &TopicId);
 
                 // TODO: handle not existing topic id.
                 // rd_kafka_mock_topic_find_by_id(mcluster, TopicId);

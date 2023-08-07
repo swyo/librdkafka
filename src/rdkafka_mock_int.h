@@ -336,7 +336,7 @@ typedef struct rd_kafka_mock_partition_s {
 typedef struct rd_kafka_mock_topic_s {
         TAILQ_ENTRY(rd_kafka_mock_topic_s) link;
         char *name;
-        int64_t id; /* TODO: change it to UUID */
+        rd_kafka_uuid_t id;
 
         rd_kafka_mock_partition_t *partitions;
         int partition_cnt;
@@ -481,7 +481,7 @@ rd_kafka_mock_topic_find_by_kstr(const rd_kafka_mock_cluster_t *mcluster,
 
 rd_kafka_mock_topic_t *
 rd_kafka_mock_topic_find_by_id(const rd_kafka_mock_cluster_t *mcluster,
-                               int64_t id);
+                               rd_kafka_uuid_t id);
 
 rd_kafka_mock_broker_t *
 rd_kafka_mock_cluster_get_coord(rd_kafka_mock_cluster_t *mcluster,

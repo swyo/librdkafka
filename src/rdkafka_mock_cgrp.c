@@ -743,9 +743,9 @@ static void rd_kafka_mock_cgrp_consumer_member_assignment_set(
 
         /* If not present, fill topic ids using names */
         RD_KAFKA_TPLIST_FOREACH(rktpar, member->target_assignment) {
-                int64_t topic_id =
+                rd_kafka_uuid_t topic_id =
                     rd_kafka_topic_partition_get_topic_id(rktpar);
-                if (!topic_id) {
+                if (!rd_kafka_uuid_cmp(topic_id, RD_KAFKA_UUID_ZERO)) {
                         rd_kafka_mock_topic_t *mtopic =
                             rd_kafka_mock_topic_find(cgrp->cluster,
                                                      rktpar->topic);
@@ -803,9 +803,9 @@ rd_kafka_mock_cgrp_consumer_member_assignment_filter(
             rd_kafka_topic_partition_list_new(assignment->cnt);
 
         RD_KAFKA_TPLIST_FOREACH(rktpar, assignment) {
-                int64_t topic_id =
+                rd_kafka_uuid_t topic_id =
                     rd_kafka_topic_partition_get_topic_id(rktpar);
-                if (topic_id) {
+                if (rd_kafka_uuid_cmp(topic_id, RD_KAFKA_UUID_ZERO)) {
                         rd_kafka_topic_partition_list_add_copy(ret, rktpar);
                 }
         }
@@ -848,7 +848,7 @@ rd_kafka_mock_cgrp_consumer_member_next_assignment(
                     rd_kafka_topic_partition_list_new(
                         member->target_assignment->cnt);
                 RD_KAFKA_TPLIST_FOREACH(rktpar, member->current_assignment) {
-                        int64_t topic_id =
+                        rd_kafka_uuid_t topic_id =
                             rd_kafka_topic_partition_get_topic_id(rktpar);
                         if (rd_kafka_topic_partition_list_find_by_id_idx(
                                 member->target_assignment, topic_id,
@@ -877,6 +877,7 @@ rd_kafka_mock_cgrp_consumer_member_next_assignment(
                  * where we have to return the assignment is
                  * after a disconnection, when returned_assignment has been
                  * reset to NULL. */
+
                 returned_assignment =
                     rd_kafka_mock_cgrp_consumer_member_assignment_filter(
                         member->target_assignment);

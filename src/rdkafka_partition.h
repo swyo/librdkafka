@@ -490,7 +490,7 @@ typedef struct rd_kafka_topic_partition_private_s {
         /** Leader epoch if known, else -1. */
         int32_t leader_epoch;
         /** Topic id. */
-        int64_t topic_id;
+        rd_kafka_uuid_t topic_id;
 } rd_kafka_topic_partition_private_t;
 
 
@@ -674,8 +674,8 @@ void rd_kafka_topic_partition_destroy_free(void *ptr);
 rd_kafka_topic_partition_t *
 rd_kafka_topic_partition_new_from_rktp(rd_kafka_toppar_t *rktp);
 void rd_kafka_topic_partition_set_topic_id(rd_kafka_topic_partition_t *rktpar,
-                                           int64_t topic_id);
-int64_t
+                                           rd_kafka_uuid_t topic_id);
+rd_kafka_uuid_t
 rd_kafka_topic_partition_get_topic_id(const rd_kafka_topic_partition_t *rktpar);
 
 void rd_kafka_topic_partition_list_init(
@@ -746,7 +746,7 @@ int rd_kafka_topic_partition_list_find_idx(
 
 int rd_kafka_topic_partition_list_find_by_id_idx(
     const rd_kafka_topic_partition_list_t *rktparlist,
-    int64_t topic_id,
+    rd_kafka_uuid_t topic_id,
     int32_t partition);
 
 rd_kafka_topic_partition_t *rd_kafka_topic_partition_list_find_topic(
@@ -782,9 +782,10 @@ rd_kafka_topic_partition_get_private(rd_kafka_topic_partition_t *rktpar) {
         rd_kafka_topic_partition_private_t *parpriv;
 
         if (!(parpriv = rktpar->_private)) {
-                parpriv               = rd_calloc(1, sizeof(*parpriv));
-                parpriv->leader_epoch = -1;
-                rktpar->_private      = parpriv;
+                parpriv                       = rd_calloc(1, sizeof(*parpriv));
+                parpriv->leader_epoch         = -1;
+                parpriv->current_leader_epoch = -1;
+                rktpar->_private              = parpriv;
         }
 
         return parpriv;
