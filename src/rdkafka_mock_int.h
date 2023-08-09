@@ -124,8 +124,8 @@ typedef struct rd_kafka_mock_cgrp_generic_s {
 typedef struct rd_kafka_mock_cgrp_consumer_s {
         TAILQ_ENTRY(rd_kafka_mock_cgrp_consumer_s) link;
         struct rd_kafka_mock_cluster_s *cluster; /**< Cluster */
-        struct rd_kafka_mock_connection_s *conn; /**< Connection */
         char *id;                                /**< Group Id */
+        int32_t group_epoch;                     /**< Group epoch */
         int session_timeout_ms;                  /**< Session timeout */
         rd_kafka_timer_t session_tmr;            /**< Session timeout timer */
         rd_kafka_timer_t rebalance_tmr;          /**< Rebalance state timer */
@@ -143,7 +143,7 @@ typedef struct rd_kafka_mock_cgrp_consumer_member_s {
         char *id;                     /**< MemberId */
         char *instance_id;            /**< Group instance id */
         rd_ts_t ts_last_activity;     /**< Last activity, e.g.,
-                                         ConsumerGroupHeartbeat */
+                                       *   ConsumerGroupHeartbeat */
         int32_t current_member_epoch; /**< Current member epoch,
                                        *   updated only on heartbeat. */
         int32_t
@@ -622,7 +622,6 @@ rd_kafka_mock_cgrp_consumer_member_t *rd_kafka_mock_cgrp_consumer_member_find(
 rd_kafka_mock_cgrp_consumer_member_t *
 rd_kafka_mock_cgrp_consumer_member_add(rd_kafka_mock_cgrp_consumer_t *mcgrp,
                                        struct rd_kafka_mock_connection_s *conn,
-                                       rd_kafka_buf_t *resp,
                                        const rd_kafkap_str_t *MemberId,
                                        const rd_kafkap_str_t *InstanceId,
                                        int session_timeout_ms);

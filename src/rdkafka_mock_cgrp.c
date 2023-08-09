@@ -823,6 +823,8 @@ rd_kafka_mock_cgrp_consumer_member_assignment_filter(
  * @param member_epoch Pointer to reported member epoch. Can be updated.
  *
  * @return The new assignment to return to the member.
+ *
+ * @remark The returned pointer ownership is transferred to the caller.
  */
 rd_kafka_topic_partition_list_t *
 rd_kafka_mock_cgrp_consumer_member_next_assignment(
@@ -839,48 +841,66 @@ rd_kafka_mock_cgrp_consumer_member_next_assignment(
                     member, current_assignment);
         }
 
-        if (*member_epoch != member->current_member_epoch ||
-            member->current_member_epoch != member->target_member_epoch) {
-                /* Epochs are different, that means we have to bump the epoch
-                 * immediately or do some revocations before that. */
+        if (*member_epoch && member->current_member_epoch < *member_epoch) {
+                /* FENCED_MEMBER_EPOCH */
+                *member_epoch = -1;
+                return NULL;
+        }
 
-                rd_kafka_topic_partition_list_t *intersection =
-                    rd_kafka_topic_partition_list_new(
-                        member->target_assignment->cnt);
-                RD_KAFKA_TPLIST_FOREACH(rktpar, member->current_assignment) {
-                        rd_kafka_uuid_t topic_id =
-                            rd_kafka_topic_partition_get_topic_id(rktpar);
-                        if (rd_kafka_topic_partition_list_find_by_id_idx(
-                                member->target_assignment, topic_id,
-                                rktpar->partition) >= 0) {
-                                rd_kafka_topic_partition_list_add_copy(
-                                    intersection, rktpar);
+        if (member->target_assignment) {
+                if (*member_epoch != member->current_member_epoch ||
+                    member->current_member_epoch !=
+                        member->target_member_epoch) {
+                        /* Epochs are different, that means we have to bump the
+                         * epoch
+                         * immediately or do some revocations before that. */
+
+                        rd_kafka_topic_partition_list_t *intersection =
+                            rd_kafka_topic_partition_list_new(
+                                member->target_assignment->cnt);
+                        if (member->current_assignment) {
+                                RD_KAFKA_TPLIST_FOREACH(
+                                    rktpar, member->current_assignment) {
+                                        rd_kafka_uuid_t topic_id =
+                                            rd_kafka_topic_partition_get_topic_id(
+                                                rktpar);
+                                        if (rd_kafka_topic_partition_list_find_by_id_idx(
+                                                member->target_assignment,
+                                                topic_id,
+                                                rktpar->partition) >= 0) {
+                                                rd_kafka_topic_partition_list_add_copy(
+                                                    intersection, rktpar);
+                                        }
+                                }
                         }
-                }
 
-                if (intersection->cnt == member->current_assignment->cnt) {
-                        /* No partitions to remove, return target assignment
-                         * and reconcile the epochs */
-                        member->current_member_epoch =
-                            member->target_member_epoch;
+                        if (!member->current_assignment ||
+                            intersection->cnt ==
+                                member->current_assignment->cnt) {
+                                /* No partitions to remove, return target
+                                 * assignment and reconcile the epochs */
+                                member->current_member_epoch =
+                                    member->target_member_epoch;
+                                returned_assignment =
+                                    rd_kafka_mock_cgrp_consumer_member_assignment_filter(
+                                        member->target_assignment);
+                                rd_kafka_topic_partition_list_destroy(
+                                    intersection);
+                        } else {
+                                /* Some partitions to remove, return
+                                 * intersection and leave the same epoch. */
+                                returned_assignment = intersection;
+                        }
+                } else if (!member->returned_assignment) {
+                        /* If all the epochs are the same, the only case
+                         * where we have to return the assignment is
+                         * after a disconnection, when returned_assignment has
+                         * been reset to NULL. */
+
                         returned_assignment =
                             rd_kafka_mock_cgrp_consumer_member_assignment_filter(
                                 member->target_assignment);
-                        rd_kafka_topic_partition_list_destroy(intersection);
-                } else {
-                        /* Some partitions to remove, return intersection and
-                         * leave the same epoch. */
-                        returned_assignment = intersection;
                 }
-        } else if (!member->returned_assignment) {
-                /* If all the epochs are the same, the only case
-                 * where we have to return the assignment is
-                 * after a disconnection, when returned_assignment has been
-                 * reset to NULL. */
-
-                returned_assignment =
-                    rd_kafka_mock_cgrp_consumer_member_assignment_filter(
-                        member->target_assignment);
         }
 
         *member_epoch = member->current_member_epoch;
@@ -932,7 +952,6 @@ rd_kafka_mock_cgrp_consumer_member_t *rd_kafka_mock_cgrp_consumer_member_find(
 rd_kafka_mock_cgrp_consumer_member_t *
 rd_kafka_mock_cgrp_consumer_member_add(rd_kafka_mock_cgrp_consumer_t *mcgrp,
                                        struct rd_kafka_mock_connection_s *conn,
-                                       rd_kafka_buf_t *resp,
                                        const rd_kafkap_str_t *MemberId,
                                        const rd_kafkap_str_t *InstanceId,
                                        int session_timeout_ms) {
@@ -957,11 +976,13 @@ rd_kafka_mock_cgrp_consumer_member_add(rd_kafka_mock_cgrp_consumer_t *mcgrp,
 
                 TAILQ_INSERT_TAIL(&mcgrp->members, member, link);
                 mcgrp->member_cnt++;
+                mcgrp->group_epoch++;
+                member->target_member_epoch = mcgrp->group_epoch;
         }
 
         mcgrp->session_timeout_ms = session_timeout_ms;
 
-        mcgrp->conn = conn;
+        member->conn = conn;
 
         rd_kafka_mock_cgrp_consumer_member_active(mcgrp, member);
 
@@ -974,6 +995,7 @@ static void rd_kafka_mock_cgrp_consumer_member_destroy(
         rd_assert(mcgrp->member_cnt > 0);
         TAILQ_REMOVE(&mcgrp->members, member, link);
         mcgrp->member_cnt--;
+        mcgrp->group_epoch++;
 
         rd_free(member->id);
 
@@ -1026,8 +1048,7 @@ static void rd_kafka_mock_cgrp_consumer_session_tmr_cb(rd_kafka_timers_t *rkts,
                                                        void *arg) {
         rd_kafka_mock_cgrp_consumer_t *mcgrp = arg;
         rd_kafka_mock_cgrp_consumer_member_t *member, *tmp;
-        rd_ts_t now     = rd_clock();
-        int timeout_cnt = 0;
+        rd_ts_t now = rd_clock();
 
         TAILQ_FOREACH_SAFE(member, &mcgrp->members, link, tmp) {
                 if (member->ts_last_activity +
@@ -1040,7 +1061,6 @@ static void rd_kafka_mock_cgrp_consumer_session_tmr_cb(rd_kafka_timers_t *rkts,
                              member->id, mcgrp->id);
 
                 rd_kafka_mock_cgrp_consumer_member_destroy(mcgrp, member);
-                timeout_cnt++;
         }
 }
 
@@ -1057,9 +1077,10 @@ rd_kafka_mock_cgrp_consumer_get(rd_kafka_mock_cluster_t *mcluster,
         if (mcgrp)
                 return mcgrp;
 
-        mcgrp          = rd_calloc(1, sizeof(*mcgrp));
-        mcgrp->cluster = mcluster;
-        mcgrp->id      = RD_KAFKAP_STR_DUP(GroupId);
+        mcgrp              = rd_calloc(1, sizeof(*mcgrp));
+        mcgrp->cluster     = mcluster;
+        mcgrp->id          = RD_KAFKAP_STR_DUP(GroupId);
+        mcgrp->group_epoch = 1;
         TAILQ_INIT(&mcgrp->members);
         rd_kafka_timer_start(&mcluster->timers, &mcgrp->session_tmr,
                              1000 * 1000 /*1s*/,

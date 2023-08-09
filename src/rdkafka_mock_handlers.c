@@ -2266,14 +2266,21 @@ rd_kafka_mock_handle_ConsumerGroupHeartbeat(rd_kafka_mock_connection_t *mconn,
                 rd_assert(mcgrp);
 
                 member = rd_kafka_mock_cgrp_consumer_member_add(
-                    mcgrp, mconn, resp, &MemberId, &InstanceId,
+                    mcgrp, mconn, &MemberId, &InstanceId,
                     /* TODO: use consumer group configuration */
                     30000);
                 rd_assert(member);
 
-                next_assignment =
-                    rd_kafka_mock_cgrp_consumer_member_next_assignment(
-                        member, current_assignment, &MemberEpoch);
+                if (MemberEpoch >= 0) {
+                        next_assignment =
+                            rd_kafka_mock_cgrp_consumer_member_next_assignment(
+                                member, current_assignment, &MemberEpoch);
+                        if (MemberEpoch < 0) {
+                                err = RD_KAFKA_RESP_ERR_FENCED_MEMBER_EPOCH;
+                        }
+                } else {
+                        rd_kafka_mock_cgrp_consumer_member_leave(mcgrp, member);
+                }
                 mtx_unlock(&mcluster->lock);
         }
 
