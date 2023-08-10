@@ -702,6 +702,8 @@ static const struct rd_kafka_err_desc rd_kafka_err_descs[] = {
               "forwarding"),
     _ERR_DESC(RD_KAFKA_RESP_ERR_FENCED_MEMBER_EPOCH,
               "Broker: The member epoch is fenced by the group coordinator"),
+    _ERR_DESC(RD_KAFKA_RESP_ERR_STALE_MEMBER_EPOCH,
+              "Broker: The member epoch is stale"),
     _ERR_DESC(RD_KAFKA_RESP_ERR__END, NULL)};
 
 

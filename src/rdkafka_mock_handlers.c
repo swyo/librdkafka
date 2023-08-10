@@ -727,25 +727,50 @@ static int rd_kafka_mock_handle_OffsetCommit(rd_kafka_mock_connection_t *mconn,
 
 
         if (!all_err) {
-                rd_kafka_mock_cgrp_generic_t *mcgrp;
+                rd_kafka_mock_cgrp_generic_t *mcgrp_generic;
 
-                mcgrp = rd_kafka_mock_cgrp_generic_find(mcluster, &GroupId);
-                if (mcgrp) {
+                mcgrp_generic =
+                    rd_kafka_mock_cgrp_generic_find(mcluster, &GroupId);
+                if (mcgrp_generic) {
                         rd_kafka_mock_cgrp_generic_member_t *member = NULL;
 
                         if (!RD_KAFKAP_STR_IS_NULL(&MemberId))
                                 member = rd_kafka_mock_cgrp_generic_member_find(
-                                    mcgrp, &MemberId);
+                                    mcgrp_generic, &MemberId);
 
                         if (!member)
                                 all_err = RD_KAFKA_RESP_ERR_UNKNOWN_MEMBER_ID;
                         else
                                 all_err =
                                     rd_kafka_mock_cgrp_generic_check_state(
-                                        mcgrp, member, rkbuf, GenerationId);
+                                        mcgrp_generic, member, rkbuf,
+                                        GenerationId);
+                } else {
+                        rd_kafka_mock_cgrp_consumer_t *mcgrp_consumer;
+                        rd_kafka_mock_cgrp_consumer_member_t *member = NULL;
+
+                        mcgrp_consumer = rd_kafka_mock_cgrp_consumer_find(
+                            mcluster, &GroupId);
+                        if (mcgrp_consumer) {
+                                if (!RD_KAFKAP_STR_IS_NULL(&MemberId))
+                                        member =
+                                            rd_kafka_mock_cgrp_consumer_member_find(
+                                                mcgrp_consumer, &MemberId);
+
+                                if (!member)
+                                        all_err =
+                                            RD_KAFKA_RESP_ERR_UNKNOWN_MEMBER_ID;
+                                else
+                                        all_err =
+                                            GenerationId !=
+                                                    member->current_member_epoch
+                                                ? RD_KAFKA_RESP_ERR_STALE_MEMBER_EPOCH
+                                                : RD_KAFKA_RESP_ERR_NO_ERROR;
+                        }
                 }
 
-                /* FIXME: also check that partitions are assigned to member */
+                /* As happens here, a real broker doesn't check that partitions
+                 * are assigned to the member, but only the GenerationId. */
         }
 
         rd_kafka_buf_read_i32(rkbuf, &TopicsCnt);
