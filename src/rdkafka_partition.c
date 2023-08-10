@@ -2587,7 +2587,7 @@ rd_kafka_topic_partition_update(rd_kafka_topic_partition_t *dst,
                 /* No private object in source, reset the fields. */
                 dstpriv->leader_epoch         = -1;
                 dstpriv->current_leader_epoch = -1;
-                dstpriv->topic_id = ((rd_kafka_uuid_t)RD_KAFKA_UUID_ZERO);
+                dstpriv->topic_id             = RD_KAFKA_UUID_ZERO;
         }
 }
 
