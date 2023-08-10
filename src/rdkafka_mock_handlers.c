@@ -2221,13 +2221,13 @@ rd_kafka_mock_handle_ConsumerGroupHeartbeat(rd_kafka_mock_connection_t *mconn,
         for (i = 0; i < TopicPartitionsCnt; i++) {
                 int32_t PartitionsCnt;
                 rd_kafka_uuid_t TopicId;
+                rd_kafka_mock_topic_t *mtopic;
                 int j;
 
                 /* TopicId */
                 rd_kafka_buf_read_uuid(rkbuf, &TopicId);
 
-                // TODO: handle not existing topic id.
-                // rd_kafka_mock_topic_find_by_id(mcluster, TopicId);
+                mtopic = rd_kafka_mock_topic_find_by_id(mcluster, TopicId);
 
                 /* #Partitions */
                 rd_kafka_buf_read_arraycnt(rkbuf, &PartitionsCnt,
@@ -2239,9 +2239,12 @@ rd_kafka_mock_handle_ConsumerGroupHeartbeat(rd_kafka_mock_connection_t *mconn,
                         /* Partitions[j] */
                         rd_kafka_buf_read_i32(rkbuf, &Partition);
 
-                        rktpar = rd_kafka_topic_partition_list_add(
-                            current_assignment, "", Partition);
-                        rd_kafka_topic_partition_set_topic_id(rktpar, TopicId);
+                        if (mtopic) {
+                                rktpar = rd_kafka_topic_partition_list_add(
+                                    current_assignment, "", Partition);
+                                rd_kafka_topic_partition_set_topic_id(rktpar,
+                                                                      TopicId);
+                        }
                 }
 
                 rd_kafka_buf_skip_tags(rkbuf);
