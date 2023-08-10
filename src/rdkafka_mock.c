@@ -2677,8 +2677,8 @@ static rd_kafka_topic_partition_list_t *ut_topic_partitions(int cnt, ...) {
 static int ut_assert_topic_partitions(rd_kafka_topic_partition_list_t *expected,
                                       rd_kafka_topic_partition_list_t *actual) {
         rd_bool_t equal;
-        char expected_str[256] = {};
-        char actual_str[256]   = {};
+        char expected_str[256] = "";
+        char actual_str[256]   = "";
 
         if (expected)
                 RD_UT_ASSERT(actual, "list should be not-NULL, but it's NULL");

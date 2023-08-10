@@ -1247,8 +1247,6 @@ void rd_kafka_mock_cgrp_consumer_destroy(rd_kafka_mock_cgrp_consumer_t *mcgrp) {
 
         TAILQ_REMOVE(&mcgrp->cluster->cgrps_consumer, mcgrp, link);
 
-        rd_kafka_timer_stop(&mcgrp->cluster->timers, &mcgrp->rebalance_tmr,
-                            rd_true);
         rd_kafka_timer_stop(&mcgrp->cluster->timers, &mcgrp->session_tmr,
                             rd_true);
         rd_free(mcgrp->id);

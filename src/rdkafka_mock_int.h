@@ -128,7 +128,6 @@ typedef struct rd_kafka_mock_cgrp_consumer_s {
         int32_t group_epoch;                     /**< Group epoch */
         int session_timeout_ms;                  /**< Session timeout */
         rd_kafka_timer_t session_tmr;            /**< Session timeout timer */
-        rd_kafka_timer_t rebalance_tmr;          /**< Rebalance state timer */
         TAILQ_HEAD(, rd_kafka_mock_cgrp_consumer_member_s)
         members;        /**< Group members */
         int member_cnt; /**< Number of group members */
