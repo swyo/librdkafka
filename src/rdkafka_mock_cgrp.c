@@ -723,13 +723,18 @@ void rd_kafka_mock_cgrps_generic_connection_closed(
 }
 
 /**
- * @brief TODO: write
+ * @brief Sets next target assignment and member epoch for \p member
+ *        to a copy of partition list \p rktparlist,
+ *        filling its topic ids if not provided, using \p cgrp cluster topics.
  *
- * @param mcgrp
- * @param rktparlist
+ * @param mcgrp The consumer group containing the member.
+ * @param member A consumer group member.
+ * @param rktparlist Next target assignment.
+ *
+ * @locks mcluster->lock MUST be held.
  */
-static void rd_kafka_mock_cgrp_consumer_member_assignment_set(
-    rd_kafka_mock_cgrp_consumer_t *cgrp,
+static void rd_kafka_mock_cgrp_consumer_member_target_assignment_set(
+    rd_kafka_mock_cgrp_consumer_t *mcgrp,
     rd_kafka_mock_cgrp_consumer_member_t *member,
     const rd_kafka_topic_partition_list_t *rktparlist) {
         rd_kafka_topic_partition_t *rktpar;
@@ -747,7 +752,7 @@ static void rd_kafka_mock_cgrp_consumer_member_assignment_set(
                     rd_kafka_topic_partition_get_topic_id(rktpar);
                 if (!rd_kafka_uuid_cmp(topic_id, RD_KAFKA_UUID_ZERO)) {
                         rd_kafka_mock_topic_t *mtopic =
-                            rd_kafka_mock_topic_find(cgrp->cluster,
+                            rd_kafka_mock_topic_find(mcgrp->cluster,
                                                      rktpar->topic);
                         if (mtopic)
                                 rd_kafka_topic_partition_set_topic_id(
@@ -757,10 +762,13 @@ static void rd_kafka_mock_cgrp_consumer_member_assignment_set(
 }
 
 /**
- * @brief TODO: write
+ * @brief Sets \p member current assignment to a copy of
+ *        \p current_assignment.
  *
- * @param member
- * @param current_assignment
+ * @param member A consumer group member.
+ * @param current_assignment Current assignment to set.
+ *
+ * @locks mcluster->lock MUST be held.
  */
 static void rd_kafka_mock_cgrp_consumer_member_current_assignment_set(
     rd_kafka_mock_cgrp_consumer_member_t *member,
@@ -777,10 +785,13 @@ static void rd_kafka_mock_cgrp_consumer_member_current_assignment_set(
 }
 
 /**
- * @brief TODO: write
+ * @brief Sets \p member returned assignment to a
+ *        copy of \p returned_assignment.
  *
- * @param member
- * @param returned_assignment
+ * @param member A consumer group member.
+ * @param returned_assignment Returned assignment to set.
+ *
+ * @locks mcluster->lock MUST be held.
  */
 static void rd_kafka_mock_cgrp_consumer_member_returned_assignment_set(
     rd_kafka_mock_cgrp_consumer_member_t *member,
@@ -795,6 +806,15 @@ static void rd_kafka_mock_cgrp_consumer_member_returned_assignment_set(
                 : NULL;
 }
 
+/**
+ * @brief Returns a copy of \p assignment containing only partitions
+ *        that can be assignment, whose topic id is non-zero.
+ *
+ * @param assignment The assignment to filter.
+ * @return Filtered assignment.
+ *
+ * @remark The returned pointer ownership is transferred to the caller.
+ */
 static rd_kafka_topic_partition_list_t *
 rd_kafka_mock_cgrp_consumer_member_assignment_filter(
     rd_kafka_topic_partition_list_t *assignment) {
@@ -825,6 +845,8 @@ rd_kafka_mock_cgrp_consumer_member_assignment_filter(
  * @return The new assignment to return to the member.
  *
  * @remark The returned pointer ownership is transferred to the caller.
+ *
+ * @locks mcluster->lock MUST be held.
  */
 rd_kafka_topic_partition_list_t *
 rd_kafka_mock_cgrp_consumer_member_next_assignment(
@@ -926,7 +948,12 @@ rd_kafka_mock_cgrp_consumer_member_next_assignment(
 }
 
 /**
- * @brief Mark member as active (restart session timer)
+ * @brief Mark member as active (restart session timer).
+ *
+ * @param mcgrp Member's consumer group.
+ * @param member Member to set as active.
+ *
+ * @locks mcluster->lock MUST be held.
  */
 void rd_kafka_mock_cgrp_consumer_member_active(
     rd_kafka_mock_cgrp_consumer_t *mcgrp,
@@ -937,6 +964,15 @@ void rd_kafka_mock_cgrp_consumer_member_active(
         member->ts_last_activity = rd_clock();
 }
 
+/**
+ * @brief Finds a member in consumer group \p mcgrp by \p MemberId.
+ *
+ * @param mcgrp Consumer group to search.
+ * @param MemberId Member id to look for.
+ * @return Found member or NULL.
+ *
+ * @locks mcluster->lock MUST be held.
+ */
 rd_kafka_mock_cgrp_consumer_member_t *rd_kafka_mock_cgrp_consumer_member_find(
     const rd_kafka_mock_cgrp_consumer_t *mcgrp,
     const rd_kafkap_str_t *MemberId) {
@@ -949,6 +985,20 @@ rd_kafka_mock_cgrp_consumer_member_t *rd_kafka_mock_cgrp_consumer_member_find(
         return NULL;
 }
 
+/**
+ * @brief Adds a member to consumer group \p mcgrp. If member with same
+ *        \p MemberId is already present, only updates the connection and
+ *        sets it as active.
+ *
+ * @param mcgrp Consumer group to add the member to.
+ * @param conn Member connection.
+ * @param MemberId Member id.
+ * @param InstanceId Group instance id (optional).
+ * @param session_timeout_ms Session timeout to use.
+ * @return New or existing member.
+ *
+ * @locks mcluster->lock MUST be held.
+ */
 rd_kafka_mock_cgrp_consumer_member_t *
 rd_kafka_mock_cgrp_consumer_member_add(rd_kafka_mock_cgrp_consumer_t *mcgrp,
                                        struct rd_kafka_mock_connection_s *conn,
@@ -989,6 +1039,14 @@ rd_kafka_mock_cgrp_consumer_member_add(rd_kafka_mock_cgrp_consumer_t *mcgrp,
         return member;
 }
 
+/**
+ * @brief Destroys a consumer group member, removing from its consumer group.
+ *
+ * @param mcgrp Member consumer group.
+ * @param member Member to destroy.
+ *
+ * @locks mcluster->lock MUST be held.
+ */
 static void rd_kafka_mock_cgrp_consumer_member_destroy(
     rd_kafka_mock_cgrp_consumer_t *mcgrp,
     rd_kafka_mock_cgrp_consumer_member_t *member) {
@@ -1014,9 +1072,14 @@ static void rd_kafka_mock_cgrp_consumer_member_destroy(
 
 
 /**
- * @brief Member is explicitly leaving the group (through a last heartbeat)
+ * @brief Called when a member must leave a consumer group.
+ *
+ * @param mcgrp Consumer group to leave.
+ * @param member Member that leaves.
+ *
+ * @locks mcluster->lock MUST be held.
  */
-rd_kafka_resp_err_t rd_kafka_mock_cgrp_consumer_member_leave(
+void rd_kafka_mock_cgrp_consumer_member_leave(
     rd_kafka_mock_cgrp_consumer_t *mcgrp,
     rd_kafka_mock_cgrp_consumer_member_t *member) {
 
@@ -1024,10 +1087,17 @@ rd_kafka_resp_err_t rd_kafka_mock_cgrp_consumer_member_leave(
                      "Member %s is leaving group %s", member->id, mcgrp->id);
 
         rd_kafka_mock_cgrp_consumer_member_destroy(mcgrp, member);
-
-        return RD_KAFKA_RESP_ERR_NO_ERROR;
 }
 
+/**
+ * @brief Find a consumer group in cluster \p mcluster by \p GroupId.
+ *
+ * @param mcluster Cluster to search in.
+ * @param GroupId Group id to search.
+ * @return Found group or NULL.
+ *
+ * @locks mcluster->lock MUST be held.
+ */
 rd_kafka_mock_cgrp_consumer_t *
 rd_kafka_mock_cgrp_consumer_find(const rd_kafka_mock_cluster_t *mcluster,
                                  const rd_kafkap_str_t *GroupId) {
@@ -1040,16 +1110,22 @@ rd_kafka_mock_cgrp_consumer_find(const rd_kafka_mock_cluster_t *mcluster,
         return NULL;
 }
 
-
 /**
  * @brief Check if any members have exceeded the session timeout.
+ *
+ * @param rkts Timers.
+ * @param arg Consumer group.
+ *
+ * @locks mcluster->lock is acquired and released.
  */
 static void rd_kafka_mock_cgrp_consumer_session_tmr_cb(rd_kafka_timers_t *rkts,
                                                        void *arg) {
         rd_kafka_mock_cgrp_consumer_t *mcgrp = arg;
         rd_kafka_mock_cgrp_consumer_member_t *member, *tmp;
-        rd_ts_t now = rd_clock();
+        rd_ts_t now                       = rd_clock();
+        rd_kafka_mock_cluster_t *mcluster = mcgrp->cluster;
 
+        mtx_unlock(&mcluster->lock);
         TAILQ_FOREACH_SAFE(member, &mcgrp->members, link, tmp) {
                 if (member->ts_last_activity +
                         (mcgrp->session_timeout_ms * 1000) >
@@ -1062,11 +1138,18 @@ static void rd_kafka_mock_cgrp_consumer_session_tmr_cb(rd_kafka_timers_t *rkts,
 
                 rd_kafka_mock_cgrp_consumer_member_destroy(mcgrp, member);
         }
+        mtx_unlock(&mcluster->lock);
 }
 
 
 /**
- * @brief Find or create a "consumer" consumer group
+ * @brief Find or create a "consumer" consumer group.
+ *
+ * @param mcluster Cluster to search in.
+ * @param GroupId Group id to look for.
+ * @return Found or new consumer group.
+ *
+ * @locks mcluster->lock MUST be held.
  */
 rd_kafka_mock_cgrp_consumer_t *
 rd_kafka_mock_cgrp_consumer_get(rd_kafka_mock_cluster_t *mcluster,
@@ -1092,7 +1175,7 @@ rd_kafka_mock_cgrp_consumer_get(rd_kafka_mock_cluster_t *mcluster,
 }
 
 
-void rd_kafka_mock_cgrp_consumer_assignment(
+void rd_kafka_mock_cgrp_consumer_target_assignment(
     rd_kafka_mock_cluster_t *mcluster,
     const char *group_id,
     const char *member_id,
@@ -1115,8 +1198,8 @@ void rd_kafka_mock_cgrp_consumer_assignment(
         if (!member)
                 goto destroy;
 
-        rd_kafka_mock_cgrp_consumer_member_assignment_set(cgrp, member,
-                                                          rktparlist);
+        rd_kafka_mock_cgrp_consumer_member_target_assignment_set(cgrp, member,
+                                                                 rktparlist);
 
 destroy:
         rd_kafkap_str_destroy(group_id_str);
@@ -1127,6 +1210,11 @@ destroy:
 /**
  * @brief A client connection closed, check if any consumer cgrp has any state
  *        for this connection that needs to be cleared.
+ *
+ * @param mcluster Cluster to search in.
+ * @param mconn Connection that was closed.
+ *
+ * @locks mcluster->lock MUST be held.
  */
 void rd_kafka_mock_cgrps_consumer_connection_closed(
     rd_kafka_mock_cluster_t *mcluster,
@@ -1147,6 +1235,13 @@ void rd_kafka_mock_cgrps_consumer_connection_closed(
         }
 }
 
+/**
+ * @brief Destroys consumer group \p mcgrp and all of its members.
+ *
+ * @param mcgrp Consumer group to destroy.
+ *
+ * @locks mcluster->lock MUST be held.
+ */
 void rd_kafka_mock_cgrp_consumer_destroy(rd_kafka_mock_cgrp_consumer_t *mcgrp) {
         rd_kafka_mock_cgrp_consumer_member_t *member;
 
@@ -1165,6 +1260,9 @@ void rd_kafka_mock_cgrp_consumer_destroy(rd_kafka_mock_cgrp_consumer_t *mcgrp) {
 /**
  * @brief A client connection closed, check if any cgrp has any state
  *        for this connection that needs to be cleared.
+ *
+ * @param mcluster Mock cluster.
+ * @param mconn Connection that was closed.
  */
 void rd_kafka_mock_cgrps_connection_closed(rd_kafka_mock_cluster_t *mcluster,
                                            rd_kafka_mock_connection_t *mconn) {

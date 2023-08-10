@@ -2680,11 +2680,10 @@ int32_t rd_kafka_topic_partition_get_current_leader_epoch(
 }
 
 /**
- * @brief TODO: write
+ * @brief Sets topic id for partition \p rktpar.
  *
- * @param rktpar
- * @param topic_id
- * @return
+ * @param rktpar Topic partition.
+ * @param topic_id Topic id to set.
  */
 void rd_kafka_topic_partition_set_topic_id(rd_kafka_topic_partition_t *rktpar,
                                            rd_kafka_uuid_t topic_id) {
@@ -2701,10 +2700,10 @@ void rd_kafka_topic_partition_set_topic_id(rd_kafka_topic_partition_t *rktpar,
 }
 
 /**
- * @brief TODO: write
+ * @brief Gets topic id from topic-partition \p rktpar.
  *
- * @param rktpar
- * @return
+ * @param rktpar Topic partition.
+ * @return Topic id, or RD_KAFKA_UUID_ZERO.
  */
 rd_kafka_uuid_t rd_kafka_topic_partition_get_topic_id(
     const rd_kafka_topic_partition_t *rktpar) {
@@ -3024,7 +3023,10 @@ int rd_kafka_topic_partition_cmp(const void *_a, const void *_b) {
                 return RD_CMP(a->partition, b->partition);
 }
 
-
+/**
+ * @brief Compare topic partitions \p a and \p b by topic id first
+ *        and then by partition.
+ */
 int rd_kafka_topic_partition_by_id_cmp(const void *_a, const void *_b) {
         const rd_kafka_topic_partition_t *a = _a;
         const rd_kafka_topic_partition_t *b = _b;
@@ -3083,7 +3085,8 @@ static int rd_kafka_topic_partition_list_find0(
 }
 
 /**
- * @brief Search 'rktparlist' for 'topic_id' and 'partition'.
+ * @brief Search 'rktparlist' for \p topic_id and \p partition with comparator
+ *        \p cmp.
  * @returns the elems[] index or -1 on miss.
  */
 static int rd_kafka_topic_partition_list_find_by_id0(
@@ -3120,7 +3123,10 @@ rd_kafka_topic_partition_t *rd_kafka_topic_partition_list_find(
                 return &rktparlist->elems[i];
 }
 
-
+/**
+ * @brief Search 'rktparlist' for 'topic_id' and 'partition'.
+ * @returns Found topic partition or NULL.
+ */
 rd_kafka_topic_partition_t *rd_kafka_topic_partition_list_find_by_id(
     const rd_kafka_topic_partition_list_t *rktparlist,
     rd_kafka_uuid_t topic_id,
@@ -3142,6 +3148,10 @@ int rd_kafka_topic_partition_list_find_idx(
             rktparlist, topic, partition, rd_kafka_topic_partition_cmp);
 }
 
+/**
+ * @brief Search 'rktparlist' for \p topic_id and \p partition.
+ * @returns the elems[] index or -1 on miss.
+ */
 int rd_kafka_topic_partition_list_find_by_id_idx(
     const rd_kafka_topic_partition_list_t *rktparlist,
     rd_kafka_uuid_t topic_id,

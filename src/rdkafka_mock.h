@@ -379,7 +379,7 @@ rd_kafka_mock_set_apiversion(rd_kafka_mock_cluster_t *mcluster,
  * @param member_id Member id.
  * @param rktparlist Partitions to assign to the member.
  */
-void rd_kafka_mock_cgrp_consumer_assignment(
+void rd_kafka_mock_cgrp_consumer_target_assignment(
     rd_kafka_mock_cluster_t *mcluster,
     const char *group_id,
     const char *member_id,

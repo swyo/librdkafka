@@ -149,15 +149,17 @@ typedef struct rd_kafka_mock_cgrp_consumer_member_s {
         int32_t
             target_member_epoch; /**< Target member epoch,
                                   *   updated only when calling
-                                  *   rd_kafka_mock_cgrp_consumer_assignment. */
+                                  *   rd_kafka_mock_cgrp_consumer_target_assignment.
+                                  */
         rd_kafka_topic_partition_list_t
             *current_assignment; /**< Current assignment,
                                   *   only updated when reported by the client.
                                   */
-        rd_kafka_topic_partition_list_t
-            *target_assignment; /**< Target assignment,
-                                 *   only updated when calling
-                                 *   rd_kafka_mock_cgrp_consumer_assignment. */
+        rd_kafka_topic_partition_list_t *
+            target_assignment; /**< Target assignment,
+                                *   only updated when calling
+                                *   rd_kafka_mock_cgrp_consumer_target_assignment.
+                                */
         rd_kafka_topic_partition_list_t
             *returned_assignment;                /**< Returned assignment */
         struct rd_kafka_mock_connection_s *conn; /**< Connection, may be NULL
@@ -611,7 +613,7 @@ rd_kafka_mock_cgrp_consumer_t *
 rd_kafka_mock_cgrp_consumer_get(rd_kafka_mock_cluster_t *mcluster,
                                 const rd_kafkap_str_t *GroupId);
 
-rd_kafka_resp_err_t rd_kafka_mock_cgrp_consumer_member_leave(
+void rd_kafka_mock_cgrp_consumer_member_leave(
     rd_kafka_mock_cgrp_consumer_t *mcgrp,
     rd_kafka_mock_cgrp_consumer_member_t *member);
 

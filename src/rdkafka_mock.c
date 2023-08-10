@@ -615,7 +615,8 @@ rd_kafka_mock_topic_new(rd_kafka_mock_cluster_t *mcluster,
         rd_kafka_mock_topic_t *mtopic;
         int i;
 
-        mtopic          = rd_calloc(1, sizeof(*mtopic));
+        mtopic = rd_calloc(1, sizeof(*mtopic));
+        /* Assign random topic id */
         mtopic->id      = (rd_kafka_uuid_t) {rd_jitter(0, INT_MAX),
                                         rd_jitter(0, INT_MAX), ""};
         mtopic->name    = rd_strdup(topic);
@@ -670,7 +671,15 @@ rd_kafka_mock_topic_find_by_kstr(const rd_kafka_mock_cluster_t *mcluster,
         return NULL;
 }
 
-
+/**
+ * @brief Find a mock topic by id.
+ *
+ * @param mcluster Cluster to search in.
+ * @param id Topic id to find.
+ * @return Found topic or NULL.
+ *
+ * @locks mcluster->lock MUST be held.
+ */
 rd_kafka_mock_topic_t *
 rd_kafka_mock_topic_find_by_id(const rd_kafka_mock_cluster_t *mcluster,
                                rd_kafka_uuid_t id) {
@@ -2659,11 +2668,11 @@ static rd_kafka_topic_partition_list_t *ut_topic_partitions(int cnt, ...) {
 }
 
 /**
- * @brief TODO: write
+ * @brief Assert \p expected partition list is equal to \p actual.
  *
- * @param expected
- * @param actual
- * @return int
+ * @param expected Expected partition list.
+ * @param actual Actual partition list.
+ * @return Comparation result.
  */
 static int ut_assert_topic_partitions(rd_kafka_topic_partition_list_t *expected,
                                       rd_kafka_topic_partition_list_t *actual) {
@@ -2697,21 +2706,36 @@ static int ut_assert_topic_partitions(rd_kafka_topic_partition_list_t *expected,
         return 0;
 }
 
+/**
+ * @struct Fixture used for testing next assignment calculation.
+ */
 struct cgrp_consumer_member_next_assignment_fixture {
+        /** Current member epoch (after calling next assignment). */
         int32_t current_member_epoch;
+        /** Current consumer assignment, if changed. */
         rd_kafka_topic_partition_list_t *current_assignment;
+        /** Returned assignment, if expected. */
         rd_kafka_topic_partition_list_t *returned_assignment;
+        /** Target assignment, if changed. */
         rd_kafka_topic_partition_list_t *target_assignment;
+        /** Should simulate a disconnection and reconnection. */
         rd_bool_t reconnected;
+        /** Should simulate a session time out. */
         rd_bool_t session_timed_out;
+        /** Comment to log. */
         const char *comment;
 };
 
-
 /**
- * @brief TODO: write
+ * @brief Test next assignment calculation using passed \p fixtures.
+ *        using a new cluster with a topic with name \p topic and
+ *        \p partitions partitions.
  *
- * @return int
+ * @param topic Topic name to create.
+ * @param partitions Topic partition.
+ * @param fixtures Array of fixtures for this test.
+ * @param fixtures_cnt Number of elements in \p fixtures.
+ * @return Number of occurred errors.
  */
 static int ut_cgrp_consumer_member_next_assignment0(
     const char *topic,
@@ -2764,7 +2788,7 @@ static int ut_cgrp_consumer_member_next_assignment0(
 
                 target_assignment = fixtures[i].target_assignment;
                 if (target_assignment) {
-                        rd_kafka_mock_cgrp_consumer_assignment(
+                        rd_kafka_mock_cgrp_consumer_target_assignment(
                             mcluster, GroupId.str, MemberId.str,
                             target_assignment);
                         rd_kafka_topic_partition_list_destroy(
@@ -2806,6 +2830,13 @@ static int ut_cgrp_consumer_member_next_assignment0(
         return failures;
 }
 
+/**
+ * @brief Test case where multiple revocations are acked.
+ *        Only when they're acked member epoch is bumped
+ *        and a new partition is returned to the member.
+ *
+ * @return Number of occurred errors.
+ */
 static int ut_cgrp_consumer_member_next_assignment1(void) {
         RD_UT_SAY("Case 1: multiple revocations acked");
 
@@ -2926,6 +2957,13 @@ static int ut_cgrp_consumer_member_next_assignment1(void) {
             topic, 4, fixtures, RD_ARRAY_SIZE(fixtures));
 }
 
+/**
+ * @brief Test case where multiple revocations happen.
+ *        Only the first revocation is acked and after that
+ *        there's a reassignment and epoch bump.
+ *
+ * @return Number of occurred errors.
+ */
 static int ut_cgrp_consumer_member_next_assignment2(void) {
         RD_UT_SAY(
             "Case 2: reassignment of revoked partition, partial revocation "
@@ -3012,6 +3050,13 @@ static int ut_cgrp_consumer_member_next_assignment2(void) {
             topic, 4, fixtures, RD_ARRAY_SIZE(fixtures));
 }
 
+/**
+ * @brief Test case where multiple revocations happen.
+ *        They aren't acked but then a
+ *        reassignment of all the revoked partition happens, bumping the epoch.
+ *
+ * @return Number of occurred errors.
+ */
 static int ut_cgrp_consumer_member_next_assignment3(void) {
         RD_UT_SAY(
             "Case 3: reassignment of revoked partition and new partition, no "
@@ -3084,6 +3129,13 @@ static int ut_cgrp_consumer_member_next_assignment3(void) {
             topic, 4, fixtures, RD_ARRAY_SIZE(fixtures));
 }
 
+/**
+ * @brief Test case where a disconnection happens and after that
+ *        the client send its assignment again, with same member epoch,
+ *        and receives back the returned assignment, even if the same.
+ *
+ * @return Number of occurred errors.
+ */
 static int ut_cgrp_consumer_member_next_assignment4(void) {
         RD_UT_SAY("Case 4: reconciliation after disconnection");
 
@@ -3131,6 +3183,13 @@ static int ut_cgrp_consumer_member_next_assignment4(void) {
             topic, 3, fixtures, RD_ARRAY_SIZE(fixtures));
 }
 
+/**
+ * @brief Test case where a session timeout happens and then
+ *        the client receives a FENCED_MEMBER_EPOCH error,
+ *        revokes all of its partitions and rejoins with epoch 0.
+ *
+ * @return Number of occurred errors.
+ */
 static int ut_cgrp_consumer_member_next_assignment5(void) {
         RD_UT_SAY("Case 5: fenced consumer");
 
@@ -3174,6 +3233,13 @@ static int ut_cgrp_consumer_member_next_assignment5(void) {
             topic, 3, fixtures, RD_ARRAY_SIZE(fixtures));
 }
 
+/**
+ * @brief Test all next assignment calculation cases,
+ *        for KIP-848 consumer group type and collect
+ *        number of errors.
+ *
+ * @return Number of occurred errors.
+ */
 static int ut_cgrp_consumer_member_next_assignment(void) {
         RD_UT_BEGIN();
         int failures = 0;
