@@ -692,7 +692,7 @@ static int rd_kafka_mock_handle_OffsetCommit(rd_kafka_mock_connection_t *mconn,
         rd_kafka_buf_t *resp = rd_kafka_mock_buf_new_response(rkbuf);
         rd_kafka_mock_broker_t *mrkb;
         rd_kafka_resp_err_t all_err;
-        int32_t GenerationId = -1, TopicsCnt;
+        int32_t GenerationIdOrMemberEpoch = -1, TopicsCnt;
         rd_kafkap_str_t GroupId, MemberId, GroupInstanceId;
 
         if (rkbuf->rkbuf_reqhdr.ApiVersion >= 3) {
@@ -703,7 +703,7 @@ static int rd_kafka_mock_handle_OffsetCommit(rd_kafka_mock_connection_t *mconn,
         rd_kafka_buf_read_str(rkbuf, &GroupId);
 
         if (rkbuf->rkbuf_reqhdr.ApiVersion >= 1) {
-                rd_kafka_buf_read_i32(rkbuf, &GenerationId);
+                rd_kafka_buf_read_i32(rkbuf, &GenerationIdOrMemberEpoch);
                 rd_kafka_buf_read_str(rkbuf, &MemberId);
         }
 
@@ -744,7 +744,7 @@ static int rd_kafka_mock_handle_OffsetCommit(rd_kafka_mock_connection_t *mconn,
                                 all_err =
                                     rd_kafka_mock_cgrp_generic_check_state(
                                         mcgrp_generic, member, rkbuf,
-                                        GenerationId);
+                                        GenerationIdOrMemberEpoch);
                 } else {
                         rd_kafka_mock_cgrp_consumer_t *mcgrp_consumer;
                         rd_kafka_mock_cgrp_consumer_member_t *member = NULL;
@@ -762,7 +762,7 @@ static int rd_kafka_mock_handle_OffsetCommit(rd_kafka_mock_connection_t *mconn,
                                             RD_KAFKA_RESP_ERR_UNKNOWN_MEMBER_ID;
                                 else
                                         all_err =
-                                            GenerationId !=
+                                            GenerationIdOrMemberEpoch !=
                                                     member->current_member_epoch
                                                 ? RD_KAFKA_RESP_ERR_STALE_MEMBER_EPOCH
                                                 : RD_KAFKA_RESP_ERR_NO_ERROR;
